@@ -90,7 +90,7 @@ engine = get_connection("fantasy_data.db")
 df = load_data(engine)
 a = df[df['owner'].notna()]
 
-#view_mode = st.sidebar.radio('View Mode', ('All Teams', 'Individual'))
+
 owner_select = st.sidebar.selectbox(
     "Fantasy Team Owner",
     tuple(['All']+list(df.owner.sort_values().unique()))
@@ -118,6 +118,23 @@ fig2 = go.Figure(
     )
 )
 
+fig3 = go.Figure()
+fig3.add_trace(go.Scatter(
+    y=df[df['owner']==owner_select].value,
+    x=df[df['owner']==owner_select].paid,
+    mode='markers',
+    marker=dict(color=df[df['owner']==owner_select]['surplus'], size=8),
+    #marker = dict(color=list(map(SetColor, a.owner))),
+    text=df[df['owner']==owner_select]['player'],
+    hovertemplate=df[df['owner']==owner_select]['player']+"<br>"+df[df['owner']==owner_select]['owner']+"<br>Paid: "+df[df['owner']==owner_select]['paid'].astype(str)+"<br>Value: "+df[df['owner']==owner_select]['value'].astype(str)
+))
+fig3.update_layout(
+    title=f'Drafted Players by {owner_select}',
+    yaxis_title='Value',
+    yaxis_range = [df.value.min()-1, df.value.max()+1],
+    xaxis_title='Paid',
+    xaxis_range = [df.paid.min()-5, df.paid.max()+5]
+)
 
 if owner_select=='All':
     tab1, tab2, tab3, tab4 = st.tabs(['Top 25 by Value', 'Top 25 by Surplus', 'Owner Summary', 'Chart'])
@@ -144,7 +161,7 @@ if owner_select=='All':
         st.plotly_chart(fig1)
 
 else:
-    t1, t2, t3 = st.tabs(['Drafted Team', 'Draft Histogram', '3'])
+    t1, t2, t3 = st.tabs(['Drafted Team', 'Draft Histogram', 'Chart'])
     with t2:
         st.plotly_chart(fig2)
 
@@ -153,4 +170,4 @@ else:
         st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']])
 
     with t3:
-        st.write('hi')        
+        st.plotly_chart(fig3)        
