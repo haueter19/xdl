@@ -5,21 +5,26 @@ import plotly.graph_objects as go
 import numpy as np
 import sqlite3
 from sqlite3 import Connection
-from sqlalchemy import MetaData, text, Column, Integer, String, ForeignKey, Table, create_engine, Float, Boolean, DateTime
-from sqlalchemy.orm import relationship, backref, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+import optimize_lineup as ol
+#from sqlalchemy import MetaData, text, Column, Integer, String, ForeignKey, Table, create_engine, Float, Boolean, DateTime
+#from sqlalchemy.orm import relationship, backref, sessionmaker
+#from sqlalchemy.ext.declarative import declarative_base
 
-#meta = MetaData()
-#engine = create_engine('sqlite:///fantasy_data.db', echo=False)
-#Session = sessionmaker(bind=engine)
-#session = Session()
-#Base = declarative_base()
 #conn = sqlite3.connect('fantasy_data.db')
 #conn.create_function('sqrt', 1, math.sqrt)
-
 #conn = st.connection('sql')
 #df = conn.query("select * From drafted")
 #st.dataframe(df)
+
+def optimize_team(tm, data):
+    w = ol.Optimized_Lineups(tm, data)
+    #print(tm)
+    w._make_pitcher_combos()
+    w._make_hitter_combos()
+    #print(w.pitcher_optimized_z, w.pitcher_optimized_lineup)
+    #print(w.hitter_optimized_z, w.hitter_optimized_lineup)
+    return w
+
 
 def SetColor(x):
     if(x == 'Lima Time!'):
@@ -48,8 +53,12 @@ def setWidth(x):
         return 0
 
 
+
+
+
+
 st.title('XDL Fantasy Baseball')
-st.subheader('Manager Scorecard')
+st.subheader('Draft Summary')
 
 
 @st.cache_resource()#allow_output_mutation=True
@@ -70,7 +79,7 @@ def load_data(conn):
             SELECT cte.* FROM cte INNER JOIN eligibility e On (cte.cbsid=e.cbsid AND cte.maxWeek=e.week)", conn)
 
     z = pd.read_sql("SELECT z.cbsid, p.CBSNAME player, o.owner, COALESCE(d.paid,0) paid, ROUND(z*4.18,1) value, ROUND(z*4.18-d.paid,1) surplus, ROUND(z,2) z, \
-                R, RBI, HR, SB, AB, H, Ha, BBa, ER, BA_cnt, BA, IP, W, SO, t.SvHld, ERA, ERA_cnt, WHIP, WHIP_cnt, zR, zRBI, zHR, zSB, zBA \
+                R, RBI, HR, SB, AB, H, Ha, BBa, ER, BA_cnt, BA, IP, W, SO, t.SvHld, ERA, ERA_cnt, WHIP, WHIP_cnt, zR, zRBI, zHR, zSB, zBA, 0 As optimized \
             FROM vw_players_season_z z \
             LEFT JOIN players p On (z.cbsid=p.cbsid) \
             INNER JOIN vw_player_totals t On (z.cbsid=t.cbsid) \
@@ -91,7 +100,7 @@ df = load_data(engine)
 a = df[df['owner'].notna()]
 
 # --- Sidebar options
-year_select = st.sidebar.radio("Draft Season", (2023, 2024))
+year_select = st.sidebar.radio("Draft Season", (2022, 2023), index=1)
 
 owner_select = st.sidebar.radio("Fantasy Team Owner",
     tuple(['All']+list(df.owner.sort_values().unique()))
@@ -155,15 +164,29 @@ fig3.update_layout(
 )
 
 if owner_select=='All':
-    tab1, tab2, tab3, tab4 = st.tabs(['Top 25 by Value', 'Top 25 by Surplus', 'Owner Summary', 'Chart'])
+    tab0, tab1, tab2, tab3, tab4 = st.tabs(['Awards', 'Top 25 by Value', 'Top 25 by Surplus', 'Owner Summary', 'Chart'])
+
+    with tab0:
+        st.markdown(':star: :star: 1/2')
 
     with tab1:
-        st.subheader("Top 25 by Value")
-        st.dataframe(df[['owner', 'player', 'value']].sort_values('value', ascending=False).head(25))
+        numRows = 25
+        st.subheader("Top 25 Players by Value")
+        st.dataframe(df[['player', 'value', 'owner']].sort_values('value', ascending=False).head(numRows), 
+            height=((numRows + 1) * 35 + 3),
+            column_config={
+                "value":st.column_config.NumberColumn("value",format="$%d")
+            }
+        )
 
     with tab2:
-        st.subheader("Top 25 by Surplus")
-        st.dataframe(df[['owner', 'player', 'surplus']].sort_values('surplus', ascending=False).head(25))
+        numRows = 25
+        st.subheader("Top 25 Players by Surplus")
+        st.dataframe(df[['player', 'surplus', 'owner']].sort_values('surplus', ascending=False).head(numRows), 
+        height=((numRows + 1) * 35 + 3),
+        column_config={
+                "surplus":st.column_config.NumberColumn("surplus",format="$%d")
+            })
 
     with tab3:
         st.subheader('Draft Summary by Owner')
@@ -173,16 +196,17 @@ if owner_select=='All':
         sub['BA'] = sub['H']/sub['AB']
         sub['ERA'] = sub['ER']/sub['IP']*9
         sub['WHIP'] = (sub['Ha']+sub['BBa'])/sub['IP']
-        st.dataframe(sub)
+        st.dataframe(sub, height=((sub.shape[0] + 1) * 35 + 3))
     
     with tab4:
         st.plotly_chart(fig1)
 
 else:
-    t1, t2, t3 = st.tabs(['Drafted Team', 'Draft Histogram', 'Chart'])
+    t1, t2, t3, t4 = st.tabs(['Drafted Team', 'Draft Histogram', 'Chart', 'Optimized Lineup'])
     with t1:
         st.write('Draft by',owner_select)
-        st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']])
+        st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']], 
+            use_container_width=True, hide_index=True, height=((df[df['owner']==owner_select].shape[0] + 1) * 35 + 3))
     
     with t2:
         fig2 = go.Figure(
@@ -196,4 +220,12 @@ else:
         #st.dataframe(pd.pivot_table(df, values='player', aggfunc='count', index='hist', columns='owner', fill_value=0, margins=True).reset_index())
 
     with t3:
-        st.plotly_chart(fig3)        
+        st.plotly_chart(fig3)
+    
+    with t4:
+        try:
+            #opt = ol.Optimized_Lineups(owner_select, df.rename(columns={'owner':'Owner', 'player':'Player'}))
+            st.write('not done')
+        except:
+            st.write('Lineup failed to optimize')
+            st.write(df.columns)
