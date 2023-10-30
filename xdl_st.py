@@ -121,10 +121,10 @@ hist['avg'] = hist['avg'] / df.owner.nunique()
 
 fig1 = go.Figure()
 fig1.add_trace(go.Scatter(
-    x=a.value,
-    y=a.paid,
+    x=a.paid,
+    y=a.value,
     mode='markers',
-    marker=dict(color=a['surplus'], size=8),
+    marker=dict(color=a['surplus'], cmid=0, size=7),
     marker_line=dict(width=list(map(setWidth, a.owner)), color=list(map(setOutline, a.owner))),
     #marker = dict(color=list(map(SetColor, a.owner))),
     text=a['player'],
@@ -132,8 +132,8 @@ fig1.add_trace(go.Scatter(
 ))
 fig1.update_layout(
     title='Drafted Players by Cost and Returned Value',
-    xaxis_title='Value',
-    yaxis_title='Paid'
+    xaxis_title='Paid',
+    yaxis_title='Value'
 )
 
 fig3 = go.Figure()
@@ -141,7 +141,7 @@ fig3.add_trace(go.Scatter(
     y=df[df['owner']==owner_select].value,
     x=df[df['owner']==owner_select].paid,
     mode='markers',
-    marker=dict(color=df[df['owner']==owner_select]['surplus'], size=8),
+    marker=dict(color=df[df['owner']==owner_select]['surplus'], cmid=0, size=7),
     #marker = dict(color=list(map(SetColor, a.owner))),
     text=df[df['owner']==owner_select]['player'],
     hovertemplate=df[df['owner']==owner_select]['player']+"<br>"+df[df['owner']==owner_select]['owner']+"<br>Paid: "+df[df['owner']==owner_select]['paid'].astype(str)+"<br>Value: "+df[df['owner']==owner_select]['value'].astype(str)
