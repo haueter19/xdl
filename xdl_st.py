@@ -90,11 +90,34 @@ engine = get_connection("fantasy_data.db")
 df = load_data(engine)
 a = df[df['owner'].notna()]
 
+# --- Sidebar options
+year_select = st.sidebar.radio("Draft Season", (2023, 2024))
 
-owner_select = st.sidebar.selectbox(
-    "Fantasy Team Owner",
+owner_select = st.sidebar.radio("Fantasy Team Owner",
     tuple(['All']+list(df.owner.sort_values().unique()))
 )
+# --- 
+
+#df.loc[df['paid']==0, 'hist'] = '0'
+df.loc[df['paid'].between(1,4), 'hist'] = '01 - 04'
+df.loc[df['paid'].between(5,9), 'hist'] = '05 - 09'
+df.loc[df['paid'].between(10,14), 'hist'] = '10 - 14'
+df.loc[df['paid'].between(15,19), 'hist'] = '15 - 19'
+df.loc[df['paid'].between(20,24), 'hist'] = '20 - 24'
+df.loc[df['paid'].between(25,29), 'hist'] = '25 - 29'
+df.loc[df['paid'].between(30,34), 'hist'] = '30 - 34'
+df.loc[df['paid'].between(35,39), 'hist'] = '35 - 39'
+df.loc[df['paid'].between(40,260), 'hist'] = '40+'
+
+#hist_mean = pd.pivot_table(df, values='player', aggfunc='count', index='owner', columns='hist', fill_value=0).mean().reset_index()
+#hist_mean.columns = ['price', 'count']
+
+#owner_hist_mean = pd.pivot_table(df[df['owner']==owner_select], values='player', aggfunc='count', index='owner', columns='hist', fill_value=0).mean().reset_index()
+#owner_hist_mean.columns = ['price', 'count']
+
+hist = pd.pivot_table(df, values='player', aggfunc='count', index='hist', columns='owner', fill_value=0, margins_name='avg', margins=True).reset_index()
+hist['avg'] = hist['avg'] / df.owner.nunique()
+
 
 fig1 = go.Figure()
 fig1.add_trace(go.Scatter(
@@ -111,11 +134,6 @@ fig1.update_layout(
     title='Drafted Players by Cost and Returned Value',
     xaxis_title='Value',
     yaxis_title='Paid'
-)
-fig2 = go.Figure(
-    go.Histogram(
-        x=df[df['owner']==owner_select]['paid']
-    )
 )
 
 fig3 = go.Figure()
@@ -162,12 +180,20 @@ if owner_select=='All':
 
 else:
     t1, t2, t3 = st.tabs(['Drafted Team', 'Draft Histogram', 'Chart'])
-    with t2:
-        st.plotly_chart(fig2)
-
     with t1:
         st.write('Draft by',owner_select)
         st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']])
+    
+    with t2:
+        fig2 = go.Figure(
+            data=[
+                go.Bar(name='League', x=hist['hist'].iloc[:-1], y=hist['avg'].iloc[:-1]),
+                go.Bar(name=owner_select, x=hist['hist'].iloc[:-1], y=hist[owner_select].iloc[:-1])
+        ])
+        fig2.update_layout(barmode='group')
+        st.plotly_chart(fig2)
+        
+        #st.dataframe(pd.pivot_table(df, values='player', aggfunc='count', index='hist', columns='owner', fill_value=0, margins=True).reset_index())
 
     with t3:
         st.plotly_chart(fig3)        
