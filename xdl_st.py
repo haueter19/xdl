@@ -70,42 +70,43 @@ def get_connection(path):
 
 @st.cache_data(hash_funcs={Connection: id})
 def load_data(conn):
-    e = pd.read_sql("WITH cte As (\
+    z = pd.read_sql("WITH cte As (\
             SELECT e.cbsid, MAX(p.CBSNAME) name, MAX(e.week) maxWeek, max(e.all_pos) all_pos, max(e.pos1B) pos1B, max(pos2B) pos2B, max(pos3B) pos3B, max(posSS) posSS, \
                 max(posMI) posMI, max(posCI) posCI, max(posOF) posOF, max(posDH) posDH, max(posSP) posSP, max(posRP) posRP, max(posP) posP \
             FROM eligibility e \
             INNER JOIN players p on (e.cbsid=p.cbsid) \
             GROUP BY e.cbsid) \
-            SELECT cte.* FROM cte INNER JOIN eligibility e On (cte.cbsid=e.cbsid AND cte.maxWeek=e.week)", conn)
-
-    z = pd.read_sql("SELECT z.cbsid, p.CBSNAME player, o.owner, COALESCE(d.paid,0) paid, ROUND(z*4.18,1) value, ROUND(z*4.18-d.paid,1) surplus, ROUND(z,2) z, \
-                R, RBI, HR, SB, AB, H, Ha, BBa, ER, BA_cnt, BA, IP, W, SO, t.SvHld, ERA, ERA_cnt, WHIP, WHIP_cnt, zR, zRBI, zHR, zSB, zBA, 0 As optimized \
-            FROM vw_players_season_z z \
-            LEFT JOIN players p On (z.cbsid=p.cbsid) \
-            INNER JOIN vw_player_totals t On (z.cbsid=t.cbsid) \
-            LEFT JOIN drafted d On (z.cbsid=d.cbsid) \
+            SELECT d.cbsid, COALESCE(p.CBSNAME, 'DNP') player, o.owner, COALESCE(d.paid,0) paid, ROUND(z*4.18,1) value, ROUND(z*4.18-d.paid,1) surplus, ROUND(z,2) z, \
+                R, RBI, HR, SB, AB, H, Ha, BBa, ER, BA_cnt, BA, IP, W, SO, t.SvHld, ERA, ERA_cnt, WHIP, WHIP_cnt, zR, zRBI, zHR, zSB, zBA, d.year, cte.*, 0 As optimized \
+            FROM drafted d \
+            LEFT JOIN players p On (d.cbsid=p.cbsid) \
             LEFT JOIN owners o On (d.owner_id=o.owner_id) \
-            WHERE z.year=2023 \
+            LEFT JOIN vw_players_season_z z On (p.cbsid=z.cbsid) \
+            LEFT JOIN vw_player_totals t On (z.cbsid=t.cbsid) \
+            LEFT JOIN cte On (d.cbsid=cte.cbsid) \
+            LEFT JOIN eligibility e On (cte.cbsid=e.cbsid AND cte.maxWeek=e.week) \
             ORDER BY z desc", conn)
 
-    df = z.merge(e[['cbsid', 'all_pos', 'pos1B', 'pos2B', 'pos3B', 'posSS', 'posMI', 'posCI', 'posOF', 'posDH', 'posSP', 'posRP', 'posP']], on='cbsid', how='left')
-    df.all_pos.fillna('',inplace=True)
-    df['type'] = df.all_pos.apply(lambda x: 'h' if 'DH' in x else 'p')
-
-    df['surplus_adj'] = df['surplus'] + abs(df['surplus'].min())
-    return df
+    #df = z.merge(e[['cbsid', 'all_pos', 'pos1B', 'pos2B', 'pos3B', 'posSS', 'posMI', 'posCI', 'posOF', 'posDH', 'posSP', 'posRP', 'posP']], on='cbsid', how='left')
+    z.all_pos.fillna('',inplace=True)
+    z['type'] = z.all_pos.apply(lambda x: 'h' if 'DH' in x else 'p')
+    z['surplus_adj'] = z['surplus'] + abs(z['surplus'].min())
+    return z
 
 engine = get_connection("fantasy_data.db")
-df = load_data(engine)
-a = df[df['owner'].notna()]
+orig_df = load_data(engine)
 
 # --- Sidebar options
 year_select = st.sidebar.radio("Draft Season", (2022, 2023), index=1)
 
 owner_select = st.sidebar.radio("Fantasy Team Owner",
-    tuple(['All']+list(df.owner.sort_values().unique()))
+    tuple(['All']+list(orig_df.owner.sort_values().unique()))
 )
 # --- 
+
+df = orig_df[orig_df['year']==year_select].reset_index().copy()
+a = df[df['owner'].notna()]
+
 
 #df.loc[df['paid']==0, 'hist'] = '0'
 df.loc[df['paid'].between(1,4), 'hist'] = '01 - 04'
