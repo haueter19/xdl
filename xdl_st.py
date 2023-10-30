@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 import sqlite3
+from sqlite3 import Connection
 from sqlalchemy import MetaData, text, Column, Integer, String, ForeignKey, Table, create_engine, Float, Boolean, DateTime
 from sqlalchemy.orm import relationship, backref, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -13,9 +14,12 @@ from sqlalchemy.ext.declarative import declarative_base
 #Session = sessionmaker(bind=engine)
 #session = Session()
 #Base = declarative_base()
-conn = sqlite3.connect('fantasy_data.db')
-conn.create_function('sqrt', 1, math.sqrt)
+#conn = sqlite3.connect('fantasy_data.db')
+#conn.create_function('sqrt', 1, math.sqrt)
 
+#conn = st.connection('sql')
+#df = conn.query("select * From drafted")
+#st.dataframe(df)
 
 def SetColor(x):
     if(x == 'Lima Time!'):
@@ -47,8 +51,16 @@ def setWidth(x):
 st.title('XDL Fantasy Baseball')
 st.subheader('Manager Scorecard')
 
-@st.cache
-def load_data():
+
+@st.cache_resource()#allow_output_mutation=True
+def get_connection(path):
+    """Put the connection in cache to reuse if path does not change."""
+    conn = sqlite3.connect('fantasy_data.db')
+    conn.create_function('sqrt', 1, math.sqrt)
+    return conn
+
+@st.cache_data(hash_funcs={Connection: id})
+def load_data(conn):
     e = pd.read_sql("WITH cte As (\
             SELECT e.cbsid, MAX(p.CBSNAME) name, MAX(e.week) maxWeek, max(e.all_pos) all_pos, max(e.pos1B) pos1B, max(pos2B) pos2B, max(pos3B) pos3B, max(posSS) posSS, \
                 max(posMI) posMI, max(posCI) posCI, max(posOF) posOF, max(posDH) posDH, max(posSP) posSP, max(posRP) posRP, max(posP) posP \
@@ -74,7 +86,8 @@ def load_data():
     df['surplus_adj'] = df['surplus'] + abs(df['surplus'].min())
     return df
 
-df = load_data()
+engine = get_connection("fantasy_data.db")
+df = load_data(engine)
 a = df[df['owner'].notna()]
 
 #view_mode = st.sidebar.radio('View Mode', ('All Teams', 'Individual'))
