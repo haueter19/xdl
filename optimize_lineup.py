@@ -6,6 +6,7 @@ class Optimized_Lineups:
     def __init__(self, owner, data):
         self.owner = owner
         self.data = data
+        self.num_hitter_positions = 14
         self.d = self.data[self.data['Owner']==owner][['Player','all_pos', 'z', 'type']].set_index('Player').to_dict(orient='index')      
         self.p_dict = {k:v for (k,v) in self.d.items() if 'p' in v['type']}
         self.h_dict = {k:v for (k,v) in self.d.items() if 'h' in v['type']}
@@ -46,14 +47,18 @@ class Optimized_Lineups:
         for num in range(len(inf)):
             _list.append([item for item in inf[num] if type(item)!=tuple]+[item for sublist in inf[num] for item in sublist if type(sublist)==tuple])
         
+        del(inf)
         _list2 = [i for i in _list if len(set(i))==12]
+        del(_list)
         inf2 = [i for i in product(_list2, self.dh2)]
         
+        del(_list2)
         _list3 = []
         for num in range(len(inf2)):
             _list3.append([list(i) for i in inf2[num] if type(i)!=tuple][0]+[list(i) for i in inf2[num] if type(i)==tuple][0])
-    
-        self.hitter_combos = [i for i in _list3 if len(set(i))==14]
+        del(inf2)
+        
+        self.hitter_combos = [i for i in _list3 if len(set(i))==self.num_hitter_positions]
         print(len(self.hitter_combos))
         self.hitter_z_list = self._z_list(self.hitter_combos, self.h_dict)
         #print(len(self.hitter_z_list))
