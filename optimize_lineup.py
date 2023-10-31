@@ -24,7 +24,7 @@ class Optimized_Lineups:
     def _make_pitcher_combos(self):
         self.pitcher_combos = [i for i in combinations(self.p_dict.keys(), 9)]
         self.pitcher_z_list = self._z_list(self.pitcher_combos, self.p_dict)
-        self.pitcher_idx = np.argmax(self.pitcher_z_list)
+        self.pitcher_idx = np.nanargmax(self.pitcher_z_list)
         self.pitcher_optimized_z = self.pitcher_z_list[self.pitcher_idx]
         self.pitcher_optimized_lineup = self.pitcher_combos[self.pitcher_idx]
         return
@@ -56,8 +56,8 @@ class Optimized_Lineups:
         self.hitter_combos = [i for i in _list3 if len(set(i))==14]
         print(len(self.hitter_combos))
         self.hitter_z_list = self._z_list(self.hitter_combos, self.h_dict)
-        print(len(self.hitter_z_list))
-        self.hitter_idx = np.argmax(self.hitter_z_list)
+        #print(len(self.hitter_z_list))
+        self.hitter_idx = np.nanargmax(self.hitter_z_list)
         self.hitter_optimized_z = self.hitter_z_list[self.hitter_idx]
         self.hitter_optimized_lineup = self.hitter_combos[self.hitter_idx]
         return    
