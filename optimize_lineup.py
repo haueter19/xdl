@@ -8,7 +8,7 @@ class Optimized_Lineups:
         self.optimize_col = optimize_col
         self.data = data.sort_values(optimize_col, ascending=False)
         self.num_hitter_positions = 14
-        self.d = self.data[self.data['Owner']==owner][['Player','all_pos', 'z', 'type']].set_index('Player').to_dict(orient='index')      
+        self.d = self.data[self.data['Owner']==owner][['Player','all_pos', self.optimize_col, 'type']].set_index('Player').to_dict(orient='index')      
         self.p_dict = {k:v for (k,v) in self.d.items() if 'p' in v['type']}
         self.h_dict = {k:v for (k,v) in self.d.items() if 'h' in v['type']}
         self.catchers = [k for k,v in self.h_dict.items() if 'C\'' in v['all_pos']]#.replace('[','').replace(']','').replace('\'','').split(", ")
@@ -28,7 +28,7 @@ class Optimized_Lineups:
         self.pitcher_z_list = self._z_list(self.pitcher_combos, self.p_dict)
         self.pitcher_idx = np.nanargmax(self.pitcher_z_list)
         self.pitcher_optimized_z = self.pitcher_z_list[self.pitcher_idx]
-        self.pitcher_optimized_lineup = self.pitcher_combos[self.pitcher_idx]
+        self.pitcher_optimized_lineup = list(self.pitcher_combos[self.pitcher_idx])
         return
     
     def _z_list(self, pos_combos, player_dict):
@@ -37,7 +37,7 @@ class Optimized_Lineups:
         for i in range(len(pos_combos)):
             for name in pos_combos[i]:
                 #print(i, sum_z)
-                sum_z += player_dict[name]['z']
+                sum_z += player_dict[name][self.optimize_col]
             z_list.append(sum_z)
             sum_z = 0
         return z_list
@@ -47,14 +47,14 @@ class Optimized_Lineups:
         max_z = -999
         max_z_idx = -1
         for num in range(len(position_combos)):
-            list_z = sum([self.h_dict[name]['z'] for name in position_combos[num] if type(name)!=tuple]+[self.h_dict[item]['z'] for sublist in position_combos[num] for item in sublist if type(sublist)==tuple])
+            list_z = sum([self.h_dict[name][self.optimize_col] for name in position_combos[num] if type(name)!=tuple]+[self.h_dict[item][self.optimize_col] for sublist in position_combos[num] for item in sublist if type(sublist)==tuple])
             if list_z > max_z and len(set(list(position_combos[num][0:-1])+list(position_combos[num][-1]))) == 12:
                     max_z = list_z
                     max_z_idx = num
         
         base_12 = list(set(list(position_combos[max_z_idx][0:-1])+list(position_combos[max_z_idx][-1])))
         self.hitter_optimized_lineup = list(position_combos[max_z_idx][0:-1])+list(position_combos[max_z_idx][-1])+[i for i in self.h_dict.keys() if i not in base_12][:2]
-        self.hitter_optimized_z = self.data[self.data['Player'].isin(self.hitter_optimized_lineup)]['z'].sum()
+        self.hitter_optimized_z = self.data[self.data['Player'].isin(self.hitter_optimized_lineup)][self.optimize_col].sum()
         #_list = []
         #for num in range(len(inf)):
         #    _list.append([item for item in inf[num] if type(item)!=tuple]+[item for sublist in inf[num] for item in sublist if type(sublist)==tuple])
