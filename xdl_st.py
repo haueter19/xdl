@@ -85,7 +85,7 @@ def get_connection(path):
 @st.cache_data(hash_funcs={Connection: id})
 def load_data(conn):
     z = pd.read_sql("WITH cte As (\
-            SELECT e.cbsid cbsid_e, MAX(p.CBSNAME) name, MAX(e.week) maxWeek, max(e.all_pos) all_pos, max(e.pos1B) pos1B, max(pos2B) pos2B, max(pos3B) pos3B, max(posSS) posSS, \
+            SELECT e.cbsid cbsid_e, MAX(p.CBSNAME) name, MAX(e.week) maxWeek, max(e.all_pos) all_pos, max(e.posC) posC, max(e.pos1B) pos1B, max(pos2B) pos2B, max(pos3B) pos3B, max(posSS) posSS, \
                 max(posMI) posMI, max(posCI) posCI, max(posOF) posOF, max(posDH) posDH, max(posSP) posSP, max(posRP) posRP, max(posP) posP \
             FROM eligibility e \
             INNER JOIN players p on (e.cbsid=p.cbsid) \
@@ -199,7 +199,7 @@ fig4.update_layout(
 )
 
 if owner_select=='All':
-    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs(['Awards', 'Top 25 by Value', 'Top 25 by Surplus', 'Summary', 'Chart', 'Optimized Chart'])
+    tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(['Awards', 'Chart', 'Optimized Plot', 'Summary', 'Top 25 by Value', 'Top 25 by Surplus', 'Top Players by Position'])
 
     with tab0:
         st.markdown('Best Draft :trophy: Charmer')
@@ -214,24 +214,11 @@ if owner_select=='All':
         st.write('Best Keepers :trophy: ', best_keepers['owner'], " (", ", ".join(df[(df['owner']==best_keepers['owner']) & (df['keeper']==1)].player.tolist()),")")
 
     with tab1:
-        numRows = 25
-        st.subheader("Top 25 Players by Value")
-        st.dataframe(df[['player', 'value', 'owner']].sort_values('value', ascending=False).head(numRows), 
-            height=((numRows + 1) * 35 + 3),
-            column_config={
-                "value":st.column_config.NumberColumn("value",format="$%d")
-            }
-        )
-
+        st.plotly_chart(fig1)
+    
     with tab2:
-        numRows = 25
-        st.subheader("Top 25 Players by Surplus")
-        st.dataframe(df[['player', 'surplus', 'owner']].sort_values('surplus', ascending=False).head(numRows), 
-        height=((numRows + 1) * 35 + 3),
-        column_config={
-                "surplus":st.column_config.NumberColumn("surplus",format="$%d")
-            })
-
+        st.plotly_chart(fig4)
+    
     with tab3:
         sub = df.groupby('owner').agg({'value':'sum', 'surplus':'sum'}).sort_values('value', ascending=False).reset_index()
         #sub['BA'] = sub['H']/sub['AB']
@@ -246,12 +233,62 @@ if owner_select=='All':
             hide_index=True, 
             column_order=['owner', 'Total Optimized Z', 'h', 'p', 'value', 'surplus'],
             column_config={"h":"Optimized Hitting Z", "p":"Optimized Pitching Z"})
-    
+
     with tab4:
-        st.plotly_chart(fig1)
-    
+        numRows = 25
+        st.subheader("Top 25 Players by Value")
+        st.dataframe(df[['player', 'value', 'owner']].sort_values('value', ascending=False).head(numRows), 
+            height=((numRows + 1) * 35 + 3),
+            column_config={
+                "value":st.column_config.NumberColumn("value",format="$%d")
+            }
+        )
+
     with tab5:
-        st.plotly_chart(fig4)
+        numRows = 25
+        st.subheader("Top 25 Players by Surplus")
+        st.dataframe(df[['player', 'surplus', 'owner']].sort_values('surplus', ascending=False).head(numRows), 
+        height=((numRows + 1) * 35 + 3),
+        column_config={
+                "surplus":st.column_config.NumberColumn("surplus",format="$%d")
+            })
+
+    with tab6:
+        st.write('Catchers')
+        st.dataframe(df[df['posC']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'R', 'RBI', 'HR', 'SB', 'BA', 'BA_cnt']].sort_values('value', ascending=False).head(12),
+            height=((12 + 1) * 35 + 3),
+            hide_index=True)
+
+        st.write('First Basemen')
+        st.dataframe(df[df['pos1B']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'R', 'RBI', 'HR', 'SB', 'BA', 'BA_cnt']].sort_values('value', ascending=False).head(12),
+            height=((12 + 1) * 35 + 3),
+            hide_index=True)
+        
+        st.write('Second Basemen')
+        st.dataframe(df[df['pos2B']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'R', 'RBI', 'HR', 'SB', 'BA', 'BA_cnt']].sort_values('value', ascending=False).head(12),
+            height=((12 + 1) * 35 + 3),
+            hide_index=True)
+        
+        st.write('Third Basemen')
+        st.dataframe(df[df['pos3B']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'R', 'RBI', 'HR', 'SB', 'BA', 'BA_cnt']].sort_values('value', ascending=False).head(12),
+            height=((12 + 1) * 35 + 3),
+            hide_index=True)
+    
+        st.write('Shortstops')
+        st.dataframe(df[df['posSS']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'R', 'RBI', 'HR', 'SB', 'BA', 'BA_cnt']].sort_values('value', ascending=False).head(12),
+            height=((12 + 1) * 35 + 3),
+            hide_index=True)
+
+        st.write('Outfielders')
+        st.dataframe(df[df['posOF']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'R', 'RBI', 'HR', 'SB', 'BA', 'BA_cnt']].sort_values('value', ascending=False).head(36),
+            height=((36 + 1) * 35 + 3),
+            hide_index=True)
+        
+        st.write('Pitchers')
+        st.dataframe(df[df['posP']==1][['player', 'owner', 'value', 'paid', 'surplus', 'z', 'W', 'SO', 'SvHld', 'ERA', 'WHIP', 'ERA_cnt']].sort_values('value', ascending=False).head(20),
+            height=((20 + 1) * 35 + 3),
+            hide_index=True)
+
 
 else:
     t1, t2, t3, t4 = st.tabs(['Optimized Lineup', 'Chart', 'Draft Histogram', 'Drafted Team'])
