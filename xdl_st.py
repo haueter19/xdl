@@ -154,7 +154,7 @@ fig3.add_trace(go.Scatter(
     marker=dict(color=df[df['owner']==owner_select]['surplus'], cmid=0, size=7),
     #marker = dict(color=list(map(SetColor, a.owner))),
     text=df[df['owner']==owner_select]['player'],
-    hovertemplate=df[df['owner']==owner_select]['player']+"<br>"+df[df['owner']==owner_select]['owner']+"<br>Paid: "+df[df['owner']==owner_select]['paid'].astype(str)+"<br>Value: "+df[df['owner']==owner_select]['value'].astype(str)
+    hovertemplate=df[df['owner']==owner_select]['player']+"<br>"+df[df['owner']==owner_select]['owner']+"<br>Paid: "+df[df['owner']==owner_select]['paid'].astype(str)+"<br>Value: "+df[df['owner']==owner_select]['value'].astype(str)+"<br>Surplus: "+df[df['owner']==owner_select]['surplus'].astype(str)
 ))
 fig3.update_layout(
     title=f'Drafted Players by {owner_select}',
@@ -203,13 +203,40 @@ if owner_select=='All':
         st.plotly_chart(fig1)
 
 else:
-    t1, t2, t3, t4 = st.tabs(['Drafted Team', 'Draft Histogram', 'Chart', 'Optimized Lineup'])
-    with t1:
-        st.write('Draft by',owner_select)
-        st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']], 
-            use_container_width=True, hide_index=True, height=((df[df['owner']==owner_select].shape[0] + 1) * 35 + 3))
+    t1, t2, t3, t4 = st.tabs(['Optimized Lineup', 'Chart', 'Draft Histogram', 'Drafted Team'])
     
+    with t1:
+        try:
+            st.subheader("Total Z for Drafted Players")
+            with st.expander("What is Z?"):
+                st.write("""
+                            Z refers to a z-score which is a statistic that compares a single value to a group of values. 
+                            Each of the hitter and pitcher metrics gets a z-score. Then those are summed to get the total z. 
+                            That number is multiplied by a conversion factor to get Value.
+                        """)
+
+            opt = ol.Optimized_Lineups(owner_select, df.rename(columns={'owner':'Owner', 'player':'Player'}))
+            opt._make_hitter_combos()
+            opt._make_pitcher_combos()
+            h = pd.DataFrame({'Pos':['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2'], 'Player':opt.hitter_optimized_lineup})
+            p = pd.DataFrame({'Pos':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'], 'Player':opt.pitcher_optimized_lineup})
+            
+            z_col1, z_col2, z_col3 = st.columns(3)
+            z_col1.metric('Total Z', value=round(opt.hitter_optimized_z+opt.pitcher_optimized_z,1))
+            z_col2.metric("Z from Hitters: ",round(opt.hitter_optimized_z,1))
+            z_col3.metric("Z from Pitchers: ",round(opt.pitcher_optimized_z,1))
+            
+            lineup_col1, lineup_col2 = st.columns(2)
+            lineup_col1.dataframe(h, hide_index=True, width=250, height=((h.shape[0] + 1) * 35 + 3))
+            lineup_col2.dataframe(p, hide_index=True, width=250, height=((p.shape[0] + 1) * 35 + 3))
+
+        except:
+            st.write('Lineup failed to optimize')
+
     with t2:
+        st.plotly_chart(fig3)
+    
+    with t3:
         fig2 = go.Figure(
             data=[
                 go.Bar(name='League', x=hist['hist'].iloc[:-1], y=hist['avg'].iloc[:-1]),
@@ -218,21 +245,8 @@ else:
         fig2.update_layout(barmode='group')
         st.plotly_chart(fig2)
         
-        #st.dataframe(pd.pivot_table(df, values='player', aggfunc='count', index='hist', columns='owner', fill_value=0, margins=True).reset_index())
-
-    with t3:
-        st.plotly_chart(fig3)
-    
     with t4:
-        try:
-            opt = ol.Optimized_Lineups(owner_select, df.rename(columns={'owner':'Owner', 'player':'Player'}))
-            opt._make_hitter_combos()
-            opt._make_pitcher_combos()
+            st.write('Draft by',owner_select)
+            st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']], 
+                use_container_width=True, hide_index=True, height=((df[df['owner']==owner_select].shape[0] + 1) * 35 + 3))
 
-            st.write(opt.hitter_optimized_z)
-            st.write(opt.hitter_optimized_lineup)
-            st.write(opt.pitcher_optimized_z)
-            st.write(opt.pitcher_optimized_lineup)
-        except:
-            st.write('Lineup failed to optimize')
-            st.write(df.columns)
