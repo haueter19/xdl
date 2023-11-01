@@ -25,6 +25,20 @@ def optimize_team(tm, data):
     #print(w.hitter_optimized_z, w.hitter_optimized_lineup)
     return w
 
+optimized = {   
+    '9 Grand Kids':{'h':3.4, 'p':10.1},
+    'Brewbirds':{'h':14.4, 'p':17.0},
+    'Charmer':{'h':27.3,'p':25.4},
+    'Dirty Birds':{'h':-16.4,'p':24.1},
+    'Harveys Wallbangers':{'h':14.3,'p':-1.8},
+    'Lil Trump & the Ivanabees':{'h':-17.4,'p':28.2},
+    'Lima Time!':{'h':3.1,'p':23.2},
+    'Roid Ragers':{'h':-17.9,'p':16.7},
+    'Trouble with the Curve':{'h':15.0,'p':28.7},
+    'Ugly Spuds':{'h':-10.5,'p':9.0},
+    'Wiscompton Wu-Tang':{'h':8.2,'p':27.3},
+    'Young Guns':{'h':-23.3,'p':19.0},
+}
 
 def SetColor(x):
     if(x == 'Lima Time!'):
@@ -71,20 +85,20 @@ def get_connection(path):
 @st.cache_data(hash_funcs={Connection: id})
 def load_data(conn):
     z = pd.read_sql("WITH cte As (\
-            SELECT e.cbsid, MAX(p.CBSNAME) name, MAX(e.week) maxWeek, max(e.all_pos) all_pos, max(e.pos1B) pos1B, max(pos2B) pos2B, max(pos3B) pos3B, max(posSS) posSS, \
+            SELECT e.cbsid cbsid_e, MAX(p.CBSNAME) name, MAX(e.week) maxWeek, max(e.all_pos) all_pos, max(e.pos1B) pos1B, max(pos2B) pos2B, max(pos3B) pos3B, max(posSS) posSS, \
                 max(posMI) posMI, max(posCI) posCI, max(posOF) posOF, max(posDH) posDH, max(posSP) posSP, max(posRP) posRP, max(posP) posP \
             FROM eligibility e \
             INNER JOIN players p on (e.cbsid=p.cbsid) \
             GROUP BY e.cbsid) \
             SELECT d.cbsid, COALESCE(p.CBSNAME, 'DNP') player, o.owner, COALESCE(d.paid,0) paid, ROUND(z*4.18,1) value, ROUND(z*4.18-d.paid,1) surplus, ROUND(z,2) z, \
-                R, RBI, HR, SB, AB, H, Ha, BBa, ER, BA_cnt, BA, IP, W, SO, t.SvHld, ERA, ERA_cnt, WHIP, WHIP_cnt, zR, zRBI, zHR, zSB, zBA, d.year, cte.*, 0 As optimized \
+                R, RBI, HR, SB, AB, H, Ha, BBa, ER, BA_cnt, BA, IP, W, SO, t.SvHld, ERA, ERA_cnt, WHIP, WHIP_cnt, zR, zRBI, zHR, zSB, zBA, d.year, d.keeper, cte.*, 0 As optimized \
             FROM drafted d \
             LEFT JOIN players p On (d.cbsid=p.cbsid) \
             LEFT JOIN owners o On (d.owner_id=o.owner_id) \
             LEFT JOIN vw_players_season_z z On (p.cbsid=z.cbsid) \
             LEFT JOIN vw_player_totals t On (z.cbsid=t.cbsid) \
-            LEFT JOIN cte On (d.cbsid=cte.cbsid) \
-            LEFT JOIN eligibility e On (cte.cbsid=e.cbsid AND cte.maxWeek=e.week) \
+            LEFT JOIN cte On (d.cbsid=cte.cbsid_e) \
+            LEFT JOIN eligibility e On (cte.cbsid_e=e.cbsid AND cte.maxWeek=e.week) \
             ORDER BY z desc", conn)
 
     #df = z.merge(e[['cbsid', 'all_pos', 'pos1B', 'pos2B', 'pos3B', 'posSS', 'posMI', 'posCI', 'posOF', 'posDH', 'posSP', 'posRP', 'posP']], on='cbsid', how='left')
@@ -118,6 +132,10 @@ df.loc[df['paid'].between(25,29), 'hist'] = '25 - 29'
 df.loc[df['paid'].between(30,34), 'hist'] = '30 - 34'
 df.loc[df['paid'].between(35,39), 'hist'] = '35 - 39'
 df.loc[df['paid'].between(40,260), 'hist'] = '40+'
+
+
+opt_df = pd.DataFrame(optimized).T
+opt_df['Total Optimized Z'] = opt_df['h']+opt_df['p']
 
 #hist_mean = pd.pivot_table(df, values='player', aggfunc='count', index='owner', columns='hist', fill_value=0).mean().reset_index()
 #hist_mean.columns = ['price', 'count']
@@ -164,11 +182,36 @@ fig3.update_layout(
     xaxis_range = [df.paid.min()-5, df.paid.max()+5]
 )
 
+fig4 = go.Figure(
+    go.Scatter(
+        x=pd.DataFrame(optimized).T.h,
+        y=pd.DataFrame(optimized).T.p,
+        mode='markers',
+        text=pd.DataFrame(optimized).T.index,
+        hovertemplate="%{text}<br><br>Hitting: "+pd.DataFrame(optimized).T.h.astype(str)+"<br>Pitching: "+pd.DataFrame(optimized).T.p.astype(str),
+    )
+)
+fig4.add_hline(y=0, line_width=3, line_dash="dash", line_color="green")
+fig4.add_vline(x=0, line_width=3, line_dash="dash", line_color="green")
+fig4.update_layout(
+    xaxis_title='Sum Z of Drafted Hitters',
+    yaxis_title='Sum Z of Drafted Pitchers',
+)
+
 if owner_select=='All':
-    tab0, tab1, tab2, tab3, tab4 = st.tabs(['Awards', 'Top 25 by Value', 'Top 25 by Surplus', 'Owner Summary', 'Chart'])
+    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs(['Awards', 'Top 25 by Value', 'Top 25 by Surplus', 'Summary', 'Chart', 'Optimized Chart'])
 
     with tab0:
-        st.markdown(':star: :star: 1/2')
+        st.markdown('Best Draft :trophy: Charmer')
+        st.markdown('Best Hitting Draft :star: Charmer')
+        st.markdown('Best Pitching Draft :star: Trouble with the Curve')
+        st.markdown('Worst Draft :cry: Young Guns')
+        st.markdown('Best Player :crown: Ronald Acuna Jr')
+        #df.sort_values('surplus',ascending=False).iloc[0]['player']
+        st.markdown('Best Return Value :moneybag: Julio Rodriguez')
+        st.write()
+        best_keepers = df[df['keeper']==1].groupby('owner').agg({'surplus':'sum'}).sort_values('surplus', ascending=False).reset_index().iloc[0]
+        st.write('Best Keepers :trophy: ', best_keepers['owner'], " (", ", ".join(df[(df['owner']==best_keepers['owner']) & (df['keeper']==1)].player.tolist()),")")
 
     with tab1:
         numRows = 25
@@ -190,17 +233,25 @@ if owner_select=='All':
             })
 
     with tab3:
-        st.subheader('Draft Summary by Owner')
-        sub = df.groupby('owner').agg({'value':'sum', 'surplus':'sum', 'R':'sum', 'RBI':'sum', 'ER':'sum', 
-            'HR':'sum', 'SB':'sum', 'H':'sum', 'AB':'sum', 'BBa':'sum', 'Ha':'sum', 'IP':'sum', 'W':'sum', 
-            'SO':'sum', 'SvHld':'sum'}).sort_values('value', ascending=False).reset_index()
-        sub['BA'] = sub['H']/sub['AB']
-        sub['ERA'] = sub['ER']/sub['IP']*9
-        sub['WHIP'] = (sub['Ha']+sub['BBa'])/sub['IP']
-        st.dataframe(sub, height=((sub.shape[0] + 1) * 35 + 3))
+        sub = df.groupby('owner').agg({'value':'sum', 'surplus':'sum'}).sort_values('value', ascending=False).reset_index()
+        #sub['BA'] = sub['H']/sub['AB']
+        #sub['ERA'] = sub['ER']/sub['IP']*9
+        #sub['WHIP'] = (sub['Ha']+sub['BBa'])/sub['IP']
+        #sub.rename(columns={'h':''})
+        sub = sub.merge(opt_df, left_on='owner', right_index=True, how='left')
+        
+        st.dataframe(sub.sort_values('Total Optimized Z', ascending=False),
+            use_container_width=True,
+            height=((sub.shape[0] + 1) * 35 + 3), 
+            hide_index=True, 
+            column_order=['owner', 'Total Optimized Z', 'h', 'p', 'value', 'surplus'],
+            column_config={"h":"Optimized Hitting Z", "p":"Optimized Pitching Z"})
     
     with tab4:
         st.plotly_chart(fig1)
+    
+    with tab5:
+        st.plotly_chart(fig4)
 
 else:
     t1, t2, t3, t4 = st.tabs(['Optimized Lineup', 'Chart', 'Draft Histogram', 'Drafted Team'])
