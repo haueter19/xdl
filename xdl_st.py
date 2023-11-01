@@ -225,8 +225,14 @@ else:
     
     with t4:
         try:
-            #opt = ol.Optimized_Lineups(owner_select, df.rename(columns={'owner':'Owner', 'player':'Player'}))
-            st.write('not done')
+            opt = ol.Optimized_Lineups(owner_select, df.rename(columns={'owner':'Owner', 'player':'Player'}))
+            opt._make_hitter_combos()
+            opt._make_pitcher_combos()
+
+            st.write(opt.hitter_optimized_z)
+            st.write(opt.hitter_optimized_lineup)
+            st.write(opt.pitcher_optimized_z)
+            st.write(opt.pitcher_optimized_lineup)
         except:
             st.write('Lineup failed to optimize')
             st.write(df.columns)
