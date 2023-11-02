@@ -16,6 +16,9 @@ import optimize_lineup as ol
 #df = conn.query("select * From drafted")
 #st.dataframe(df)
 
+# Markdown emojis: https://gist.github.com/rxaviers/7360908
+
+
 def optimize_team(tm, data):
     w = ol.Optimized_Lineups(tm, data)
     #print(tm)
@@ -330,7 +333,7 @@ else:
                 go.Bar(name='League', x=hist['hist'].iloc[:-1], y=hist['avg'].iloc[:-1]),
                 go.Bar(name=owner_select, x=hist['hist'].iloc[:-1], y=hist[owner_select].iloc[:-1])
         ])
-        fig2.update_layout(barmode='group')
+        fig2.update_layout(barmode='group', xaxis_title='Range of Paid Cost', yaxis_title='# of Players')
         st.plotly_chart(fig2)
         
     with t4:
