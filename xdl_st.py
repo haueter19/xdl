@@ -1,4 +1,5 @@
 import streamlit as st
+import json
 import math
 import pandas as pd
 import plotly.graph_objects as go
@@ -18,6 +19,8 @@ import optimize_lineup as ol
 
 # Markdown emojis: https://gist.github.com/rxaviers/7360908
 
+with open('trades_2023.json') as fp:
+    trades = json.load(fp)
 
 def optimize_team(tm, data):
     w = ol.Optimized_Lineups(tm, data)
@@ -294,7 +297,7 @@ if owner_select=='All':
 
 
 else:
-    t1, t2, t3, t4 = st.tabs(['Optimized Lineup', 'Chart', 'Draft Histogram', 'Drafted Team'])
+    t1, t2, t3, t4, t5 = st.tabs(['Optimized Lineup', 'Chart', 'Draft Histogram', 'Drafted Team', 'Trades'])
     
     with t1:
         try:
@@ -341,3 +344,23 @@ else:
             st.dataframe(df[df['owner']==owner_select][['player', 'surplus_adj', 'paid', 'value', 'surplus', 'R', 'RBI', 'HR', 'SB', 'BA', 'W', 'SO', 'SvHld', 'ERA', 'WHIP']], 
                 use_container_width=True, hide_index=True, height=((df[df['owner']==owner_select].shape[0] + 1) * 35 + 3))
 
+    with t5:
+        if trades.get(owner_select):
+            v_rec, v_tra = 0,0
+            for n in trades[owner_select]:
+                v_rec += n['received_stats']['z']
+                v_tra += n['traded_stats']['z']
+            
+            trade_col1, trade_col2, trade_col3 = st.columns(3)
+            trade_col1.metric('Trades',len(trades[owner_select]))
+            trade_col2.metric('Value Received',round(v_rec,2))
+            trade_col3.metric('Value Traded', round(v_tra,2))
+
+            for i, item in enumerate(trades[owner_select]):
+                st.write('Trade '+str(i+1)+' in Week '+str(item['week'])+':')
+                st.write(owner_select+' gets '+', '.join([j for j in item['received_names']]))
+                st.write(item['partner']+' gets '+', '.join([j for j in item['traded_names']]))
+                st.write('\n')
+        else:
+            st.write(owner_select+' made no trades this year')
+        
