@@ -22,6 +22,16 @@ import optimize_lineup as ol
 with open('trades_2023.json') as fp:
     trades = json.load(fp)
 
+team_trade_value = {}
+for tm in trades.keys():
+    diff = 0
+    if trades.get(tm):
+        for j in trades[tm]:
+            diff += j['received_value'] - j['traded_value']
+    else:
+        team_trade_value[tm] = 0
+    team_trade_value[tm] = diff
+
 def optimize_team(tm, data):
     w = ol.Optimized_Lineups(tm, data)
     #print(tm)
@@ -212,13 +222,12 @@ if owner_select=='All':
         st.markdown('Best Hitting Draft :star: Charmer')
         st.markdown('Best Pitching Draft :star: Trouble with the Curve')
         st.markdown('Worst Draft :cry: Young Guns')
-        st.markdown('Best Player :crown: Ronald Acuna Jr')
-        #df.sort_values('surplus',ascending=False).iloc[0]['player']
-        st.markdown('Best Return Value :moneybag: Julio Rodriguez')
-        st.write()
+        st.markdown('Best Trader :handshake: Lima Time!')
         best_keepers = df[df['keeper']==1].groupby('owner').agg({'surplus':'sum'}).sort_values('surplus', ascending=False).reset_index().iloc[0]
         st.write('Best Keepers :trophy: ', best_keepers['owner'], " (", ", ".join(df[(df['owner']==best_keepers['owner']) & (df['keeper']==1)].player.tolist()),")")
-
+        st.markdown('Best Player :crown: Ronald Acuna Jr')
+        st.markdown('Best Return Value :moneybag: Julio Rodriguez')
+    
     with tab1:
         st.plotly_chart(fig1)
     
