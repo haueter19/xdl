@@ -367,8 +367,8 @@ else:
 
             for i, item in enumerate(trades[owner_select]):
                 st.write('Trade '+str(i+1)+' in Week '+str(item['week'])+':')
-                st.write(owner_select+' gets '+', '.join([j for j in item['received_names']]))
-                st.write(item['partner']+' gets '+', '.join([j for j in item['traded_names']]))
+                st.write(owner_select+' gets '+', '.join([j for j in item['received_names']])+' for a gain of '+str(round(item['received_value'],1)))
+                st.write(item['partner']+' gets '+', '.join([j for j in item['traded_names']])+' for a gain of '+str(round(item['traded_value'],1)))
                 st.write('\n')
         else:
             st.write(owner_select+' made no trades this year')
