@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+    <head>
+	    <meta charset="UTF-8">
+        <meta name="author" content="Daniel Haueter">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="{{ url_for('static', path='/bootstrap.min.css') }}" rel="stylesheet">
+        <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+        <title>Draft Room</title>
+        <meta content="text/html; charset=windows-1252" http-equiv="Content-Type">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script>
+            var data = {{ json|safe }};
+            var owners = {{ owners_json|safe }};
+            var paid_hist_data = {{ paid_histogram_data|safe }};
+        </script>
+        <script src="/static/js_functions.js"></script>
+        <script src="/static/sort-table.js"></script>
+
+        <style>
+            tr[id='summary_Lima Time'] { color: blue;}
+        </style>
+    </head>
+    <body>
+        <div class="row border-bottom border-3 border-primary p-3">
+            <div class="col-md-2">
+                <form action="/fantasy/draft/update_bid" onsubmit="return validateForm()" id="bid_form" method="get">
+                    <h3>Auction Bid Submit</h3>
+                    <input id="player_select" class="form-control" list="player_list" name="playerid">
+                    <datalist id="player_list">
+                        {% for i, row in players.iterrows() %}
+                            <option value="{{ row['playerid'] }}">{{ row['Name'] }}</option>
+                        {% endfor %}
+                    </datalist>
+                    <br>
+                    <table style="font-size:12px" id="team_input">
+                        <tr>
+                            <td>
+                                <input type="radio" id="team2" name="owner" value="Brewbirds">
+                                <label for="team2">Brewbirds</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team3" name="owner" value="Charmer">
+                                <label for="team3">Charmer</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team4" name="owner" value="Dirty Birds">
+                                <label for="team4">Dirty Birds</label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" id="team5" name="owner" value="Harvey">
+                                <label for="team5">Harvey</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team6" name="owner" value="Lil Trump">
+                                <label for="team6">Lil Trump</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team7" name="owner" value="Lima Time">
+                                <label for="team7">Lima Time</label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" id="team8" name="owner" value="Midnight">
+                                <label for="team8">Midnight</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team10" name="owner" value="Roid Ragers">
+                                <label for="team10">Roiders</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team11" name="owner" value="Trouble">
+                                <label for="team11">Trouble</label>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <input type="radio" id="team9" name="owner" value="Ugly Spuds">
+                                <label for="team9">Ugly Spuds</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team12" name="owner" value="Wu-Tang">
+                                <label for="team12">Wu-Tang</label>
+                            </td>
+                            <td>
+                                <input type="radio" id="team13" name="owner" value="Young Guns">
+                                <label for="team13">Young Guns</label>
+                            </td>
+                        </tr>
+                        
+                    </table>
+                    <br>
+                    <label for="price">Auction Price</label>
+                    <input type="text" name="price" id="price_entry" size="1" placeholder="Price" value=1>
+                    <button id="submit">Record Bid</button><br><br>
+                    <button id="update_bid">Update Bid</button>
+                    <a href="/fantasy/draft/reset_all"><s>Reset</s></a>
+                </form>
+                <div class="text-danger" id="error_msg" style="display:none;"></div>
+            </div>
+            <div class="col-md-2 mb-3 border-start border-dark">
+                <h5>Similar Players by Projected Stats</h5>
+                <div id="sims"></div>
+            </div>
+            <div class="col-md-2 border-start border-dark mb-2">
+                <h5 id=radar_chart_player_name>Radar Chart</h5>
+                <div id="radar_chart"></div>
+            </div>
+            <div class='col-md-6 mb-2 border-start border-dark' id="player_stats_window">
+                
+            </div>
+        </div>
+        <div class="row p-3">
+            <div class="col-md-2" style="height:500px; overflow-y:scroll;">
+                <h3>Draft Order</h3>
+                <table id="drafted_scroll" style="width:100%; font-size:12px;">
+                    {% for i, row in owned.sort_values('Timestamp', ascending=False).iterrows() %}
+                    <tr>
+                        <td>{{ row['Name'] }}</td>
+                        <td>${{ row['Paid'] }}</td>
+                        <td>{{ row['Owner'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+            <div class="col-md-1 border-start border-dark">
+                <h4>Cash Meter</h4>
+                <table>
+                    <tr>
+                        <th>Team</th>
+                        <th>Cash+</th>
+                    </tr>
+                    {% for i, row in owners_df.iterrows() %}
+                    <tr>
+                        <td>{{ row['Owner'] }}</td>
+                        <td id="{{ row['Owner']|replace(' ','_') }}_meter">{{ row['Cash'] }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                Players Left:<br>{{ players_left }}<br>
+                Dollars Left:<br>{{ dollars_left }}<br>
+                Initial $/z:<br>{{ init_dollars_per_z }}<br>
+                Current $/z:<br>{{ current_dollars_per_z }}<br>
+            </div>
+            <div class="col-md-9 border-start border-dark">
+                <ul class="nav nav-tabs">
+                    <li class="nav-item">
+                      <a class="nav-link" data-bs-toggle="tab" href="#summary">Summary</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#rosters">Rosters</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#charts">Charts</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#tiers">Tiers</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#players">Players</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" data-bs-toggle="tab" href="#paid_hist">Paid $ Hist</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#team_z">Total Z</a>
+                    </li>
+                  </ul>
+                  <div class="tab-content">
+                    <div class="tab-pane container" id="summary">
+                        <table class="table table-condensed table-hover" id="myTable" style="font-size:12px;">
+                            <thead>
+                                <th onclick="sortTable(0)">Owner</th>
+                                <th onclick="sortTable(1)">Cash Sitch</th>
+                                <th onclick="sortTable(2)">$ Left</th>
+                                <th onclick="sortTable(3)">$ Left/Plyr</th>
+                                <th onclick="sortTable(4)">Drafted</th>
+                                <th onclick="sortTable(5)">Value+/-</th>
+                                <th onclick="sortTable(6)">Pts</th>
+                                <th onclick="sortTable(7)">Rank</th>
+                                <th onclick="sortTable(8)">$/Unit</th>
+                                <th onclick="sortTable(9)">BA</th>
+                                <th onclick="sortTable(10)">HR</th>
+                                <th onclick="sortTable(11)">R</th>
+                                <th onclick="sortTable(12)">RBI</th>
+                                <th onclick="sortTable(13)">SB</th>
+                                <th onclick="sortTable(14)">ERA</th>
+                                <th onclick="sortTable(15)">WHIP</th>
+                                <th onclick="sortTable(16)">W</th>
+                                <th onclick="sortTable(17)">SO</th>
+                                <th onclick="sortTable(18)">Sv+Hld</th>
+                                
+                            </thead>
+                        {% for i, row in owners_df.iterrows() %}
+                            <tr id="summary_{{ row['Owner'] }}">
+                                <td>{{ row['Owner'] }}</td>
+                                <td>{{ row['Cash'] }}</td>
+                                <td>{{ row['$ Left'] }}</td>
+                                <td>{{ row['$ Left / Plyr'] }}</td>
+                                <td>{{ row['Drafted'] }}</td>
+                                <td>{{ row['Value'] }}</td>
+                                <td>{{ row['Pts'] }}</td>
+                                <td>{{ row['Rank'] }}</td>
+                                <td>{{ row['$/unit'] }}</td>
+                                <td>{{ row['BA'] }}</td>
+                                <td>{{ row['HR'] }}</td>
+                                <td>{{ row['R'] }}</td>
+                                <td>{{ row['RBI'] }}</td>
+                                <td>{{ row['SB'] }}</td>
+                                <td>{{ row['ERA'] }}</td>
+                                <td>{{ row['WHIP'] }}</td>
+                                <td>{{ row['W'] }}</td>
+                                <td>{{ row['SO'] }}</td>
+                                <td>{{ row['Sv+Hld'] }}</td>
+                            </tr>
+                        {% endfor %}
+                        </table>
+                    </div>
+                    <div class="tab-pane container fade" id="rosters">
+                        <table class='table table-condensed table-hover' id="rosterTable" style="font-size:10px;">
+                            <thead>
+                                <th>Pos</th>
+                                <th>Brewbirds</th>
+                                <th>Charmer</th>
+                                <th>DB's</th>
+                                <th>Harvey</th>
+                                <th>Lil T</th>
+                                <th><font color='blue'>Lima</font></th>
+                                <th>Midnight</th>
+                                <th>Ragers</th>
+                                <th>Trouble</th>
+                                <th>Ugly Spuds</th>
+                                <th>Wu-Tang</th>
+                                <th>Young Guns</th>
+                            </thead>
+                            {% for i, row in roster.iterrows() %}
+                                <tr>
+                                    <td>{{ i }}</td>
+                                    <td>{{ row['Brewbirds'] }}</td>
+                                    <td>{{ row['Charmer'] }}</td>
+                                    <td>{{ row['Dirty Birds'] }}</td>
+                                    <td>{{ row['Harvey'] }}</td>
+                                    <td>{{ row['Lil Trump'] }}</td>
+                                    <td><b>{{ row['Lima Time'] }}</b></td>
+                                    <td>{{ row['Midnight'] }}</td>
+                                    <td>{{ row['Roid Ragers'] }}</td>
+                                    <td>{{ row['Trouble'] }}</td>
+                                    <td>{{ row['Ugly Spuds'] }}</td>
+                                    <td>{{ row['Wu-Tang'] }}</td>
+                                    <td>{{ row['Young Guns'] }}</td>
+                                </tr>
+                            {% endfor %}
+                        </table>
+                    </div>
+                    <div class="tab-pane container fade pt-4" id="charts">
+                        <button type="button" class="btn btn-primary" id="button-1">Pts</button>
+                        <button type="button" class="btn btn-primary active" id="button-2">$ Left</button>
+                        <button type="button" class="btn btn-primary" id="button-3">Total Z</button>
+                        <button type="button" class="btn btn-primary" id="button-4">$/Unit</button>
+                        <button type="button" class="btn btn-primary" id="button-5">Drafted</button>
+                        <div id="owners_chart"></div>
+                    </div>
+                    <div class="tab-pane container fade pt-4" id="tiers">
+                        <div id="tiers_chart"></div>
+                    </div>
+                    <div class="tab-pane container fade" id="players">
+                        <div id="z_players_chart"></div>
+                    </div>
+                    <div class="tab-pane container  active" id="paid_hist">
+                        <div id="paid_hist_chart"></div>
+                    </div>
+                    <div class="tab-pane container fade pt-4" id="team_z">
+                        <table class="table table-condensed table-hover" id="z_table" style="font-size:12px;">
+                            <thead>
+                                <th onclick="sortTable(0)">Owner</th>
+                                <th onclick="sortTable(1)">HR</th>
+                                <th onclick="sortTable(2)">SB</th>
+                                <th onclick="sortTable(3)">R</th>
+                                <th onclick="sortTable(4)">RBI</th>
+                                <th onclick="sortTable(5)">BA</th>
+                                <th onclick="sortTable(6)">W</th>
+                                <th onclick="sortTable(7)">K</th>
+                                <th onclick="sortTable(8)">Sv+Hld</th>
+                                <th onclick="sortTable(9)">ERA</th>
+                                <th onclick="sortTable(10)">WHIP</th>                                
+                            </thead>
+                        {% for i, row in team_z.iterrows() %}
+                            <tr>
+                                <td>{{ row['Owner'] }}</td>
+                                <td>{{ row['zHR'] }}</td>
+                                <td>{{ row['zSB'] }}</td>
+                                <td>{{ row['zR'] }}</td>
+                                <td>{{ row['zRBI'] }}</td>
+                                <td>{{ row['zBA'] }}</td>
+                                <td>{{ row['zW'] }}</td>
+                                <td>{{ row['zSO'] }}</td>
+                                <td>{{ row['zSv+Hld'] }}</td>
+                                <td>{{ row['zERA'] }}</td>
+                                <td>{{ row['zWHIP'] }}</td>
+                            </tr>
+                        {% endfor %}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
