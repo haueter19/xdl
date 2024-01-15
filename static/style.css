@@ -1,0 +1,172 @@
+#main {
+	background-color: #ffffff; 
+	width: 1200px; 
+	margin: auto;
+}
+table.dataframe {
+	border-collapse: collapse;
+	border: 1px solid black;
+}
+.dataframe tr:hover {
+	background-color: yellow;
+	color: black;
+}
+.dataframe th {
+	color: white;
+	background-color: black;
+	cursor: pointer;
+}
+.dataframe a {
+	color: blue;
+	text-decoration: none;
+}
+col:first-child {background: #CCC}
+col:nth-child(2n+3) {background: #CCC}
+#myTable {
+	width: 100%;
+	overflow-x: scroll;
+	cursor: pointer;
+}
+#df_table {
+	width:100%;
+	overflow-x: scroll;
+	cursor: pointer;
+}
+.dataframe.th {
+	min-width: 25px;
+}
+.dataframe.tr:nth-child(odd) {
+	background-color: #d1d1d1;
+}
+.no_stripes th {
+	background-color: lightgray;
+}
+.no_stripes tr {
+	background-color: white;
+}
+.no_stripes a {
+	color: black;
+}
+/*
+ul {
+	list-style-type: none;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	background-color: #333;
+  }
+li {
+	float: left;
+}
+li a, .dropbtn {
+	display: inline-block;
+	text-align: center;
+	padding: 14px 16px;
+	text-decoration: none;
+}  
+li a:hover, .dropdown:hover .dropbtn {
+	background-color: red;
+}  
+li.dropdown {
+	display: inline-block;
+}
+
+.dropdown-content {
+	display: none;
+	position: absolute;
+	background-color: #f9f9f9;
+	min-width: 160px;
+	box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+	z-index: 1;
+}  
+.dropdown-content a {
+	color: black;
+	padding: 12px 16px;
+	text-decoration: none;
+	display: block;
+	text-align: left;
+}
+.dropdown-content a:hover {background-color: #f1f1f1;}
+.dropdown:hover .dropdown-content {
+	display: block;
+}
+*/
+body {
+	background-color: gray
+	/*
+	BACKGROUND-IMAGE: url('/static/images/rockerslogo-header.jpg');
+	BACKGROUND-REPEAT: repeat;
+	*/
+}
+/*
+ul.breadcrumb {
+	padding: 0px 10px;
+	list-style: none;
+	background-color: #eee;
+}
+ul.breadcrumb li {
+	display: inline;
+	font-size: 16px;
+	color: #0275d8;
+	text-decoration: none;
+	vertical-align: middle;
+}
+ul.breadcrumb li+li:before {
+	padding: 8px;
+	color: black;
+	content: "/\00a0";
+}
+ul.breadcrumb li a {
+	color: #0275d8;
+	text-decoration: none;
+}
+ul.breadcrumb li a:hover {
+	color: #01447e;
+	text-decoration: underline;
+}
+li a:hover, .dropdown:hover .breadcrumb {
+	background-color: #eee;
+	vertical-align: middle;
+}
+*/
+.tab {
+	float: left;
+	border: 1px solid #ccc;
+	background-color: #f1f1f1;
+	width: 100%;
+  }
+  
+  /* Style the buttons that are used to open the tab content */
+  .tab button {
+	display: block;
+	background-color: inherit;
+	color: black;
+	padding: 4px 10px;
+	width: 100%;
+	border: none;
+	outline: none;
+	text-align: left;
+	cursor: pointer;
+	transition: 0.3s;
+  }
+  
+  /* Change background color of buttons on hover */
+  .tab button:hover {
+	background-color: #ddd;
+  }
+  
+  /* Create an active/current "tab button" class */
+  .tab button.active {
+	background-color: #ccc;
+  }
+  
+  /* Style the tab content */
+  .tabcontent {
+	float: left;
+	display: none;
+	padding: 0px 12px;
+	border: 1px solid #ccc;
+	width: 100%;
+	border-left: none;
+	height: 100%;
+  }
