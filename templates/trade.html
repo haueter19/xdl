@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+    <head>
+	    <meta charset="UTF-8">
+        <meta name="author" content="Daniel Haueter">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="{{ url_for('static', path='/bootstrap.min.css') }}" rel="stylesheet">
+        <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+        <title>Trade Analyzer</title>
+        <meta content="text/html; charset=windows-1252" http-equiv="Content-Type">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script>
+            var data = {{ lg|safe }};
+            var opp;
+            var selectedTeam1;
+            var selectedTeam2;
+            var team1;
+            var team2;
+
+            async function fetchData(tm) {
+                const key = tm; // Key to identify the data in session storage
+
+                // Check if data is already in session storage
+                const cachedData = sessionStorage.getItem(key);
+                if (cachedData) {
+                    console.log('Loading data from session storage...');
+                    return Promise.resolve(JSON.parse(cachedData)); // Convert to JSON and return it
+                } else {
+                    console.log('Data not found in session storage. Fetching from server...');
+                    // Data is not in session storage, fetch from server
+                    return fetch(`/optimize?tm=${tm}`)
+                    .then(response => {
+                        if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                        }
+                        return response.json(); // Parse JSON data from the response
+                    })
+                    .then(data => {
+                        // Store the fetched data in session storage
+                        sessionStorage.setItem(key, JSON.stringify(data));
+                        return data; // Return the fetched data
+                    })
+                    .catch(error => {
+                        console.error('There was a problem with the fetch operation:', error);
+                    });
+                }
+            }
+
+            function updateTeamTable(operation, side, playerData) {
+                // Determine whether to add or subtract stats
+                if (side=='left'){
+                    tbl_el = $('#team2Gets tbody tr')
+                    tbl_head = $('#team2Gets thead th')
+                } else {
+                    tbl_el = $('#team1Gets tbody tr')
+                    tbl_head = $('#team1Gets thead th')
+                }
+                var multiplier = operation === 'add' ? 1 : -1;
+                tbl_el.each(function() {
+                    // Iterate over each cell in the row and update it based on playerData
+                    $('td', this).each(function(index) {
+                        var statName = tbl_head.eq(index).text(); // Match header with cell
+                        if (playerData.hasOwnProperty(statName)) {
+                            var currentValue = Number($(this).text());// || 0;
+                            
+                            if (operation === 'add'){
+                                //console.log(statName,currentValue, playerData[statName])
+                                $(this).text((currentValue + playerData[statName]).toFixed(3));
+                            } else {
+                                //console.log(statName,currentValue, playerData[statName])
+                                $(this).text((currentValue - playerData[statName]).toFixed(3));
+                            }
+                        }
+                    });
+                });
+            }
+
+
+            
+
+        </script>
+        <script src="/static/sort-table.js"></script>
+        <style>
+            .table {font-size: small;}
+        </style>
+    </head>
+    <body>
+        <dv class="row m-2">
+            <div class="col">
+                Team 1 gets:
+                <table id="team1Gets" class="table">
+                    <thead>
+                        <tr>
+                            <th>z</th>
+                            <th>HR</th>
+                            <th>SB</th>
+                            <th>R</th>
+                            <th>RBI</th>
+                            <th>BA</th>
+                            <th>W</th>
+                            <th>SO</th>
+                            <th>Sv+Hld</th>
+                            <th>ERA</th>
+                            <th>WHIP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col">
+                Team 2 gets:
+                <table id="team2Gets" class="table">
+                    <thead>
+                        <tr>
+                            <th>z</th>
+                            <th>HR</th>
+                            <th>SB</th>
+                            <th>R</th>
+                            <th>RBI</th>
+                            <th>BA</th>
+                            <th>W</th>
+                            <th>SO</th>
+                            <th>Sv+Hld</th>
+                            <th>ERA</th>
+                            <th>WHIP</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                            <td>0</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </dv>
+        <div class="row m-2">
+            <div class="col-6">
+                <select id="team1Select">
+                    <option value="" disabled selected>Select Team</option>
+                    {% for row in teams %}
+                    <option value='{{ row }}'>{{ row }}</option>
+                    {% endfor %}
+                </select>
+                <span id="team1Loading" style="display:none;">loading...</span>
+                <div id="team1Roster">
+                    
+                </div>
+            </div>
+
+            <div class="col-6">
+                <select id="team2Select">
+                    <option value="" disabled selected>Select Team</option>
+                    {% for row in teams %}
+                    <option value='{{ row }}'>{{ row }}</option>
+                    {% endfor %}
+                </select>
+                <span id="team2Loading" style="display:none;">loading...</span>
+                <div id="team2Roster">  
+                </div>
+            </div>
+        </div>
+    </body>
+    <script>
+        $(document).ready(function() {
+            // Delegate click event to the dynamically loaded <tr> elements
+            $(document).on('click', 'tr', function() {
+                var parentDivId = $(this).closest('div').attr('id');
+        
+                // Store or use the parent ID as needed
+                console.log('Parent Div ID:', parentDivId);
+                
+                // Get the id of the clicked <tr> element
+                var trId = $(this).attr('id');
+
+                // Log the id to the console
+                console.log('Clicked row ID:', trId);
+                
+                if (parentDivId.slice(4,5)=='1'){
+                    var side = 'left'
+                    var playerData = team1[selectedTeam1]['roster'].find(player => player.cbsid === Number(trId.slice(2,))); //getPlayerData(team1, selectedTeam1, playerId); // Fetch player data from session JSON                    
+                } else {
+                    var side = 'right'
+                    var playerData = team2[selectedTeam2]['roster'].find(player => player.cbsid === Number(trId.slice(2,)));
+                }      
+                
+                // Check the current background color
+                var currentColor = $(this).css('background-color');
+                
+                // Since color might not always be returned in the same format
+                // like 'rgba(0, 0, 0, 0)' or 'transparent', checking should be normalized
+                if (currentColor === 'rgba(0, 0, 0, 0)' || currentColor === 'transparent') {
+                    // Change background color to light green
+                    $(this).css('background-color', 'rgb(144, 238, 144)');
+                    updateTeamTable('add', side, playerData);
+                } else {
+                    // Reset background color to transparent
+                    $(this).css('background-color', 'rgba(0, 0, 0, 0)');
+                    updateTeamTable('subtract', side, playerData);
+                }
+            });
+        
+            // team 1
+            $("#team1Select").change(async function() {
+                var selectedTeam = $(this).val();
+                selectedTeam1 = selectedTeam;
+                console.log('Selected team:', selectedTeam);
+                $("#team1Loading").show();
+
+                try {
+                    console.log('Fetching data...');
+                    var responseData = await fetchData(selectedTeam);
+                    team1 = responseData;
+                    console.log('Data fetched:', responseData);
+                    $("#team1Loading").hide();
+
+                    var ros = responseData[selectedTeam]['roster'];
+                    console.log('Roster:', ros);
+                    opt_totals = responseData[selectedTeam]['opt_totals'];
+                    bench_totals = responseData[selectedTeam]['bench_totals'];
+                    console.log(opt_totals)
+                    console.log(bench_totals)
+                    var h = ``;
+                    var row = ``;
+                    var hitterHeaders = '<table class="table table-condensed table-hover"><thead><th>Pos</th><th></th><th>Player</th><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th></thead>'
+                    var pitcherHeaders = '<table class="table table-condensed table-hover"><thead><th>Pos</th><th></th><th>Player</th><th>z</th><th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th></thead>';
+                    var benchHitterCount = 0;
+                    var benchPitcherCount = 0;
+                    x = 0;
+                    $.each(ros, function(i) {
+                        // Append to string based on the type of player
+                        if (ros[i]['opt_designation'] == 'starting_hitter'){
+                            if (ros[i]['optimized_position'] == 'C'){
+                                h += hitterHeaders;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Pos']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['HR']}</td>
+                                <td>${ros[i]['SB']}</td>
+                                <td>${ros[i]['R']}</td>
+                                <td>${ros[i]['RBI']}</td>
+                                <td>${ros[i]['BA']}</td>
+                                </tr>`;
+                        }
+                        if (ros[i]['opt_designation']== 'starting_pitcher'){
+                            if (ros[i]['optimized_position'] == 'P1'){
+                                h += `<tr><td colspan="2">Hitter Totals</td><td>${opt_totals['hitter_z']}</td><td>${opt_totals['HR']}</td><td>${opt_totals['SB']}</td><td>${opt_totals['R']}</td><td>${opt_totals['RBI']}</td><td>${opt_totals['BA']}</td></tr>`
+                                h += '</table>'
+                                h += pitcherHeaders;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Pos']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['W']}</td>
+                                <td>${ros[i]['SO']}</td>
+                                <td>${ros[i]['Sv+Hld']}</td>
+                                <td>${ros[i]['ERA']}</td>
+                                <td>${ros[i]['WHIP']}</td>
+                                </tr>`;
+                        }
+                        if (ros[i]['opt_designation']== 'bench_hitter'){
+                            if (ros[i]['type'] == 'h' & benchHitterCount ==  0){
+                                h += `<tr><td colspan="2">Pitcher Totals</td><td>${opt_totals['pitcher_z']}</td><td>${opt_totals['W']}</td><td>${opt_totals['SO']}</td><td>${opt_totals['Sv+Hld']}</td><td>${opt_totals['ERA']}</td><td>${opt_totals['WHIP']}</td></tr>`
+                                h += '</table>'
+                                h += hitterHeaders;
+                                benchHitterCount += 1;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Pos']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['HR']}</td>
+                                <td>${ros[i]['SB']}</td>
+                                <td>${ros[i]['R']}</td>
+                                <td>${ros[i]['RBI']}</td>
+                                <td>${ros[i]['BA']}</td>
+                                </tr>`;
+                        }
+                        if (ros[i]['opt_designation']== 'bench_pitcher'){
+                            if (ros[i]['type'] == 'p' & benchPitcherCount ==  0){
+                                h += '</table>'
+                                h += pitcherHeaders;
+                                benchPitcherCount += 1;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Pos']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['W']}</td>
+                                <td>${ros[i]['SO']}</td>
+                                <td>${ros[i]['Sv+Hld']}</td>
+                                <td>${ros[i]['ERA']}</td>
+                                <td>${ros[i]['WHIP']}</td>
+                                </tr>`;
+                        }
+                    });
+                    h += '</table>'
+                    $('#team1Roster').html(h);
+                    
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                }
+            });
+
+            // ----------- team 2
+            $("#team2Select").change(async function() {
+                var selectedTeam = $(this).val();
+                selectedTeam2 = selectedTeam;
+                console.log('Selected team:', selectedTeam);
+                $("#team2Loading").show();
+
+                try {
+                    console.log('Fetching data...');
+                    var responseData = await fetchData(selectedTeam);
+                    team2 = responseData;
+                    console.log('Data fetched:', responseData);
+                    $("#team2Loading").hide();
+
+                    var ros = responseData[selectedTeam]['roster'];
+                    console.log('Roster:', ros);
+                    opt_totals = responseData[selectedTeam]['opt_totals'];
+                    bench_totals = responseData[selectedTeam]['bench_totals'];
+                    console.log(opt_totals)
+                    console.log(bench_totals)
+                    var h = ``;
+                    var row = ``;
+                    var hitterHeaders = '<table class="table table-condensed table-hover"><thead><th>Pos</th><th>Player</th><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th></thead>'
+                    var pitcherHeaders = '<table class="table table-condensed table-hover"><thead><th>Pos</th><th>Player</th><th>z</th><th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th></thead>';
+                    var benchHitterCount = 0;
+                    var benchPitcherCount = 0;
+                    x = 0;
+                    $.each(ros, function(i) {
+                        // Append to string based on the type of player
+                        if (ros[i]['opt_designation'] == 'starting_hitter'){
+                            if (ros[i]['optimized_position'] == 'C'){
+                                h += hitterHeaders;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['HR']}</td>
+                                <td>${ros[i]['SB']}</td>
+                                <td>${ros[i]['R']}</td>
+                                <td>${ros[i]['RBI']}</td>
+                                <td>${ros[i]['BA']}</td>
+                                </tr>`;
+                        }
+                        if (ros[i]['opt_designation']== 'starting_pitcher'){
+                            if (ros[i]['optimized_position'] == 'P1'){
+                                h += `<tr><td colspan="2">Hitter Totals</td><td>${opt_totals['hitter_z']}</td><td>${opt_totals['HR']}</td><td>${opt_totals['SB']}</td><td>${opt_totals['R']}</td><td>${opt_totals['RBI']}</td><td>${opt_totals['BA']}</td></tr>`
+                                h += '</table>'
+                                h += pitcherHeaders;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['W']}</td>
+                                <td>${ros[i]['SO']}</td>
+                                <td>${ros[i]['Sv+Hld']}</td>
+                                <td>${ros[i]['ERA']}</td>
+                                <td>${ros[i]['WHIP']}</td>
+                                </tr>`;
+                        }
+                        if (ros[i]['opt_designation']== 'bench_hitter'){
+                            if (ros[i]['type'] == 'h' & benchHitterCount ==  0){
+                                h += `<tr><td colspan="2">Pitcher Totals</td><td>${opt_totals['pitcher_z']}</td><td>${opt_totals['W']}</td><td>${opt_totals['SO']}</td><td>${opt_totals['Sv+Hld']}</td><td>${opt_totals['ERA']}</td><td>${opt_totals['WHIP']}</td></tr>`
+                                h += '</table>'
+                                h += hitterHeaders;
+                                benchHitterCount += 1;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['HR']}</td>
+                                <td>${ros[i]['SB']}</td>
+                                <td>${ros[i]['R']}</td>
+                                <td>${ros[i]['RBI']}</td>
+                                <td>${ros[i]['BA']}</td>
+                                </tr>`;
+                        }
+                        if (ros[i]['opt_designation']== 'bench_pitcher'){
+                            if (ros[i]['type'] == 'p' & benchPitcherCount ==  0){
+                                h += '</table>'
+                                h += pitcherHeaders;
+                                benchPitcherCount += 1;
+                            }
+                            h += `<tr id="id${ros[i]['cbsid']}">
+                                <td>${ros[i]['optimized_position']}</td>
+                                <td>${ros[i]['Player']}</td>
+                                <td>${ros[i]['z']}</td>
+                                <td>${ros[i]['W']}</td>
+                                <td>${ros[i]['SO']}</td>
+                                <td>${ros[i]['Sv+Hld']}</td>
+                                <td>${ros[i]['ERA']}</td>
+                                <td>${ros[i]['WHIP']}</td>
+                                </tr>`;
+                        }
+                    });
+                    h += '</table>'
+                    $('#team2Roster').html(h);
+                    
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                }
+            });
+        });
+    </script>
+</html>

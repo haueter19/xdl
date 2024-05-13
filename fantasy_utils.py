@@ -39,7 +39,7 @@ class Fantasy_Projections():
         self.quals = None
         #self.qual_p = None
         
-        self.proj_systems = ['atc', 'thebatx', 'dc', 'steamer', 'zips']
+        self.proj_systems = ['atc', 'thebat', 'dc', 'steamer', 'zips']
         self.pos_hierarchy = ['C', '2B', '3B', 'SS', 'OF', '1B', 'DH', 'SP', 'RP', 'P']
         self.keepers_url = 'https://docs.google.com/spreadsheets/d/1dwDC2uMsfVRYeDECKLI0Mm_QonxkZvTkZTfBgnZo7-Q/edit#gid=1723951361'
 
@@ -219,14 +219,15 @@ class Fantasy_Projections():
                 pass
         p = pd.concat(proj_system_list).sort_values('PlayerId')
         p.rename(columns={'PlayerId':'playerid'},inplace=True)
-
+        
         # Add Fangraphs auction values
         try:
             val_p = pd.read_csv('data/'+str(self.yr)+'-fangraphs-auction-calculator-p.csv')
             val_p.rename(columns={'PlayerId':'playerid', 'POS':'Pos'},inplace=True)
-            p = p.merge(val_p[['playerid', 'Pos', 'Dollars']])
+            p = p.merge(val_p[['playerid', 'Pos', 'Dollars']], how='inner')
         except:
             p['Dollars'] = 0
+        
         
         # Add CBS values
         try:
@@ -234,11 +235,13 @@ class Fantasy_Projections():
         except:
             p['CBS'] = 0
         
+
         # Little clean up
         p.rename(columns={'H':'HA'},inplace=True)
         p['Sv+Hld'] = p['SV']+p['HLD']
         p['Primary_Pos'] = p['Pos'].apply(lambda x: ', '.join(x.split('/')))
         p = p.rename(columns={'ï»¿Name':'Name'})
+
 
         # Collapse pitchers into one per row
         pproj = pd.pivot_table(p, index='playerid', values=['GS', 'G', 'IP', 'ER', 'HA', 'SO', 'BB', 'W', 'SV', 'HLD', 'Sv+Hld'], aggfunc='mean')\
@@ -257,6 +260,7 @@ class Fantasy_Projections():
         pproj['WHIP'] = (pproj['HA']+pproj['BB'])/pproj['IP']
         pproj = pproj.drop_duplicates(subset='playerid')
         pproj.CBS.fillna(0,inplace=True)
+
 
         ######## I should refactor this section. Pull this out and use a different function to apply CBSID to data downloaded from Fangraphs ###########
         # 
@@ -422,7 +426,7 @@ class Fantasy_Projections():
 
 
 def owners(conv, n_teams=12, tm_players=23):
-    tot_dollars = n_teams * tot_dollars
+    tot_dollars = n_teams * 260
     tot_players = n_teams * tm_players
     df = pd.read_sql('players', engine)
     owners_df = df.groupby('Owner').agg({'Name':'count', 'Paid':'sum', 'z':'sum', 'H':'sum', 'AB':'sum', 'HR':'sum', 'R':'sum', 'RBI':'sum', 'SB':'sum', 'W':'sum', 'Sv+Hld':'sum', 'SO':'sum'}).reset_index()
@@ -458,6 +462,8 @@ def check_roster_pos(roster, name, team_name, pos, eligible):
             eligibility.extend(['OF1', 'OF2', 'OF3', 'OF4', 'OF5'])
         if p in ['SP', 'RP']:
             eligibility.extend(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'])
+        if p in ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']:
+            eligibility.extend([p])
         
     eligibility = list(dict.fromkeys(eligibility))
     if 'SP' in eligible_at or 'RP' in eligible_at: 

@@ -1,6 +1,6 @@
-function sortTable(n) {
+function sortTable(n, tbl_id) {
   var table, rows, switching, i, x, y, shouldSwitch;
-  table = document.getElementById("myTable");
+  table = document.getElementById(tbl_id);
   switching = true;
   /*Make a loop that will continue until
   no switching has been done:*/

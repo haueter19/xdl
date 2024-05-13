@@ -14,6 +14,11 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql.sqltypes import DATETIME, TIMESTAMP
 from starlette.responses import RedirectResponse
 from sklearn.preprocessing import MinMaxScaler
+from pydantic import BaseModel
+from typing import Optional
+import requests
+from fantasy_utils import check_roster_pos
+import optimize_lineup as ol
 
 meta = MetaData()
 engine = create_engine('sqlite:///fantasy_data.db', echo=False)
@@ -32,8 +37,8 @@ tot_pitchers = n_teams * 9
 total_z_over_0 = pd.read_sql(f'SELECT sum(z) z FROM players{str(datetime.now().year)} WHERE z>0', engine).iloc[0]['z']
 #total_z_over_0 = 626.134#701.39442#591.1999720030974
 orig_conv =  (tm_dollars/tm_players)*(tot_players/total_z_over_0)
-owner_list = ['Brewbirds', 'Charmer', 'Dirty Birds', 'Harvey', 'Lil Trump', 'Lima Time', 'Midnight', 'Roid Ragers', 'Trouble', 'Ugly Spuds', 'Wu-Tang', 'Young Guns']
-
+owner_list = ['Brewbirds', 'Charmer', 'Dirty Birds', 'Harvey', 'Lima Time', "Madness", 'Mother', 'Roid Ragers', 'Trouble', 'Ugly Spuds', 'Wu-Tang', 'Young Guns']
+print(orig_conv)
 drafted_by_pos = {
     'C':n_teams,
     '1B':round(n_teams*1.5),
@@ -50,10 +55,17 @@ drafted_by_pos = {
 }
 
 
+class Bid(BaseModel):
+    playerid: str
+    owner: str
+    price: Optional[list] = 0
+    supp: Optional[int] = 0
+
 
 players = Table('players'+str(datetime.now().year), meta,
                 Column('playerid', String, primary_key=True),
                 Column('Paid', Integer),
+                Column('Supp', Integer),
                 Column('Owner', String(25)),
                 Column('Timestamp', DATETIME)
     )
@@ -90,37 +102,14 @@ def next_closest_in_tier(df, pos, playerid):
     except:
         return 0
 
+def optimize_team(tm, df):
+    x = ol.Optimized_Lineups(tm, df[df['Owner']==tm])
+    x.catchers = [k for k,v in x.h_dict.items() if 'C,' in v['all_pos']]
+    x._make_pitcher_combos()
+    x._make_hitter_combos()
+    return {'pitcher_z':x.pitcher_optimized_z, 'pitcher_lineup':x.pitcher_optimized_lineup, 'hitter_z':x.hitter_optimized_z, 'hitter_lineup':x.hitter_optimized_lineup}
 
-def check_roster_pos(roster, name, team_name, pos, eligible):
-    eligible_at = eligible.split('/')
-    eligibility = []
-    for p in eligible.split('/'):
-        if p=='C':
-            eligibility.extend(['C'])
-        if p=='1B':
-            eligibility.extend(['1B', 'CI'])
-        if p=='2B':
-            eligibility.extend(['2B', 'MI'])
-        if p=='3B':
-            eligibility.extend(['3B', 'CI'])
-        if p=='SS':
-            eligibility.extend(['SS', 'MI'])
-        if p=='OF':
-            eligibility.extend(['OF1', 'OF2', 'OF3', 'OF4', 'OF5'])
-        if p in ['SP', 'RP']:
-            eligibility.extend(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'])
-        
-    eligibility = list(dict.fromkeys(eligibility))
-    if 'SP' in eligible_at or 'RP' in eligible_at: 
-        pos_list = eligibility
-    else:
-        pos_list = eligibility+['DH1', 'DH2']
-    for p in pos_list:
-        if roster.loc[p, team_name]==0:
-            roster.loc[p, team_name] = name
-            return p
-    
-    return pos_list
+
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
@@ -133,6 +122,15 @@ async def slash_route():
 @app.get("/draft")
 async def draft_view(request: Request):
     h = pd.read_sql('players'+str(datetime.now().year), engine)
+    h.loc[h['Primary_Pos'].isin(['C', '1B', '2B', '3B', 'OF', 'DH', 'SS']), 'PosClass'] = 'h'
+    h['PosClass'].fillna('p', inplace=True)
+    h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/n_teams
+    
+    avg_stats = {}
+    for a,b in (h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/12).reset_index(name='mean').iterrows():
+        avg_stats[b['index']] = round(b['mean'],1)
+    avg_stats['BA'] = round(avg_stats['H']/avg_stats['AB'],3)
+
     h['Paid'].fillna(0,inplace=True)
     h['Paid'] = h['Paid'].apply(lambda x: int(x) if x>0 else x)
     for i in ['z', 'Dollars', 'Value', 'Value_ly', 'IP', 'K/9']:
@@ -164,14 +162,15 @@ async def draft_view(request: Request):
     for i in ['BA', 'HR', 'R', 'RBI', 'SB', 'ERA', 'WHIP', 'W', 'SO', 'Sv+Hld']:
         owners_df['Pts'] += owners_df[i].rank()
     owners_df['Rank'] = owners_df['Pts'].rank()
-    roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'], data=np.zeros((23,n_teams)), columns=owner_list)
+    roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'], data=np.zeros((33,n_teams)), columns=owner_list)
     for tm in owners_df.Owner.tolist():
         for i, row in h[h['Owner']==tm][['Name', 'Owner', 'Primary_Pos', 'Pos', 'Paid', 'Timestamp']].sort_values("Timestamp").iterrows():
             if row['Paid']==0:
-                pass
+                check_roster_pos(roster, h.loc[i]['Name'], h.loc[i]['Owner'], 'B'+str(int(h.loc[i]['Supp'])), 'B'+str(int(h.loc[i]['Supp'])))
             else:
                 if h.loc[i]['Paid'] > 0:
                     check_roster_pos(roster, h.loc[i]['Name'], h.loc[i]['Owner'], h.loc[i]['Primary_Pos'], h.loc[i]['Pos'])
+
     
     h.loc[h['Paid'].between(1,4), 'hist'] = '1-4'
     h.loc[h['Paid'].between(5,9), 'hist'] = '5-9'
@@ -183,27 +182,34 @@ async def draft_view(request: Request):
     h.loc[h['Paid'].between(35,39), 'hist'] = '35-39'
     h.loc[h['Paid']>=40, 'hist'] = '40+'
     dollars_rem = (tot_dollars - owners_df['Paid'].sum())
-    z_rem = (h[h['z']>0]['z'].sum() - owners_df['z'].sum())
+    #z_rem = (h[h['z']>0]['z'].sum() - owners_df['z'].sum())
+    z_rem = h[h['z']>0]['z'].sum() - h[(h['Owner'].notna()) & (h['z']>0)]['z'].sum()
     conv_factor = dollars_rem / z_rem
-    h['curValue'] = round(h['z']*conv_factor,1)
-    #h['next_in_tier'] = h.apply(lambda x: next_closest_in_tier(h, x['Primary_Pos'], x['playerid']),axis=1)
+    
+    #h['curValue'] = round(h['z']*conv_factor,1)
+    h['curValue'] = round(h['Value']*(conv_factor/orig_conv),1)
+    h['surplus'] = round(h['Value'] - h['CBS'],2)
+
     return templates.TemplateResponse('draft.html', {'request':request, 'players':h.sort_values('z', ascending=False), 
-                                    'owned':h[h['Owner'].notna()], 'owners_df':owners_df, 'roster':roster, 
+                                    'owned':h[h['Owner'].notna()], 'owners_df':owners_df.sort_values('Rank', ascending=False), 'roster':roster, 
+                                    'owner_list': owner_list,
                                     'owners_json':owners_df.to_json(orient='index'), 
                                     'json':h.sort_values('z', ascending=False).to_json(orient='records'),
+                                    'avg_stats':avg_stats,
                                     'players_left':(tot_players - owners_df.Drafted.sum()),
                                     'dollars_left':(tot_dollars - owners_df.Paid.sum()),
+                                    'inflation_factor':round((conv_factor/orig_conv),2),
                                     'init_dollars_per_z':round((tot_dollars/h[h['z']>=0]['z'].sum()*player_split),2),
                                     'current_dollars_per_z':round(owners_df.Paid.sum() / owners_df.z.sum(),2),
                                     'paid_histogram_data':h[h['Owner']=='Lima Time'].groupby('hist')['Paid'].count().reindex(pd.Series(['1-4', '5-9', '10-14', '15-19', '20-24', '25-29', '30-34', '35-39', '40+'])).fillna(0).to_json(orient='index'),
-                                    'team_z':h.groupby('Owner')[['zHR', 'zSB', 'zR', 'zRBI', 'zBA', 'zW', 'zSO', 'zSv+Hld', 'zERA', 'zWHIP']].mean().reset_index().round(2),
+                                    'team_z':h.groupby('Owner')[['zHR', 'zSB', 'zR', 'zRBI', 'zBA', 'zW', 'zSO', 'zSv+Hld', 'zERA', 'zWHIP']].sum().reset_index().round(2),
                                     })
 
 @app.get("/draft/update_bid")
-async def update_db(playerid: str, price: int, owner: str):
+async def update_db(playerid=int, owner=str, price=int, supp=int):
     conn = engine.connect()
     meta.create_all(engine)
-    conn.execute(players.update().values(Paid=price, Owner=owner, Timestamp=datetime.now()).where(players.c.playerid==playerid))
+    conn.execute(players.update().values(Paid=price, Supp=supp, Owner=owner, Timestamp=datetime.now()).where(players.c.playerid==playerid))
     conn.close()
     return RedirectResponse('/draft') #{'playerid':playerid, 'price':price, 'owner':owner}
 
@@ -226,3 +232,84 @@ async def reset_all():
     conn = engine.connect()
     conn.execute(t)
     return RedirectResponse('/draft')
+
+
+
+@app.get('/optimize')
+async def optimize(tm: str):
+    yr = datetime.now().year
+    wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week']-1
+    df  = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
+                    CASE WHEN e.DH>=5 THEN 'h' ELSE 'p' END As type \
+                    FROM roster r \
+                    INNER JOIN projections j On (j.cbsid=r.cbsid) \
+                    INNER JOIN players p On (r.cbsid=p.cbsid) \
+                    INNER JOIN owners o On (r.owner_id=o.owner_id) \
+                    INNER JOIN (SELECT cbsid, all_pos, posC C, pos1B '1B', pos2B '2B', pos3B '3B', posSS SS, posOF OF, posDH DH, posSP SP, posRP RP, posP P FROM eligibility WHERE year=2024 and week={wk}) e On (r.cbsid=e.cbsid) \
+            WHERE j.year={yr} AND j.week={wk} AND j.proj_type='ros' AND r.year={yr} AND r.week={wk} \
+            ORDER BY Owner, year, week", engine)
+    
+    opt = optimize_team(tm, df)
+    df['z'] = round(df['z'],1)
+    df.fillna(0,inplace=True)
+    opt_pos = ['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4','OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
+    bench = df[(df['Owner']==tm) & (~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup']))].sort_values('type')['Player'].to_list()
+    df = df[df['Owner']==tm].set_index('Player').reindex(opt['hitter_lineup']+opt['pitcher_lineup']+bench).reset_index()
+    df['optimized_position'] = opt_pos[:df.shape[0]]
+    df.loc[df['Player'].isin(opt['hitter_lineup']), 'opt_designation'] = 'starting_hitter'
+    df.loc[df['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
+    df.loc[(~df['Player'].isin(opt['hitter_lineup'])) & (df['type']=='h'), 'opt_designation'] = 'bench_hitter'
+    df.loc[(~df['Player'].isin(opt['pitcher_lineup'])) & (df['type']=='p'), 'opt_designation'] = 'bench_pitcher'
+    opt_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']].sum()
+    opt_totals['z'] = round(opt_totals['z'],1)
+    opt_totals['hitter_z'] = round(df[df['Player'].isin(opt['hitter_lineup'])]['z'].sum(),1)
+    opt_totals['BA'] = round(opt_totals['H']/opt_totals['AB'],3)
+    opt_totals['ERA'] = round(opt_totals['ER']/opt_totals['IP']*9,2)
+    opt_totals['WHIP'] = round((opt_totals['BBa']+opt_totals['Ha'])/opt_totals['IP'],2)
+    opt_totals.to_dict()
+    bench_totals = df[~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
+    bench_totals['z'] = round(bench_totals['z'],1)
+    opt_totals['pitcher_z'] = round(df[df['Player'].isin(opt['pitcher_lineup'])]['z'].sum(),1)
+    bench_totals['BA'] = round(bench_totals['H']/bench_totals['AB'],3)
+    bench_totals['ERA'] = round(bench_totals['ER']/bench_totals['IP']*9,2)
+    bench_totals['WHIP'] = round((bench_totals['BBa']+bench_totals['Ha'])/bench_totals['IP'],2)
+    df = df.to_dict(orient='records')
+
+        
+    return {tm:{'roster':df, 'opt_totals':opt_totals, 'bench_totals':bench_totals}}
+    #return {tm:{'pitcher_z':opt['pitcher_optimized_z'], 'pitcher_lineup':opt['pitcher_optimized_lineup'], 'hitter_z':opt['hitter_optimized_z'], 'hitter_lineup':opt['hitter_optimized_lineup']}}
+
+
+
+@app.get('/trade', response_class=HTMLResponse)
+async def trade_analyzer(request: Request):
+    yr = datetime.now().year
+    wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week']-1
+    df  = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
+                    CASE WHEN e.DH>=5 THEN 'h' ELSE 'p' END As type \
+                    FROM roster r \
+                    INNER JOIN projections j On (j.cbsid=r.cbsid) \
+                    INNER JOIN players p On (r.cbsid=p.cbsid) \
+                    INNER JOIN owners o On (r.owner_id=o.owner_id) \
+                    INNER JOIN (SELECT cbsid, all_pos, posC C, pos1B '1B', pos2B '2B', pos3B '3B', posSS SS, posOF OF, posDH DH, posSP SP, posRP RP, posP P FROM eligibility WHERE year=2024 and week={wk}) e On (r.cbsid=e.cbsid) \
+            WHERE j.year={yr} AND j.week={wk} AND j.proj_type='ros' AND r.year={yr} AND r.week={wk} \
+            ORDER BY Owner, year, week", engine)
+    df['z'] = round(df['z'],1)
+    df.fillna(0,inplace=True)
+    
+    teams = df.Owner.sort_values().unique().tolist()
+    lg = df[df['Owner']!='Lima Time!'].sort_values(['Owner', 'type']).fillna(0)
+    opt = optimize_team('Lima Time!', df)
+    opt_pos = ['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4','OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
+    bench = df[(df['Owner']=='Lima Time!') & (~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup']))].sort_values('type')['Player'].to_list()
+    df = df[df['Owner']=='Lima Time!'].set_index('Player').reindex(opt['hitter_lineup']+opt['pitcher_lineup']+bench).reset_index()
+    df['optimized_position'] = opt_pos[:df.shape[0]]
+    df.loc[df['Player'].isin(opt['hitter_lineup']), 'opt_designation'] = 'starting_hitter'
+    df.loc[df['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
+    df.loc[(~df['Player'].isin(opt['hitter_lineup'])) & (df['type']=='h'), 'opt_designation'] = 'bench_hitter'
+    df.loc[(~df['Player'].isin(opt['pitcher_lineup'])) & (df['type']=='p'), 'opt_designation'] = 'bench_pitcher'
+    ros_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
+    return templates.TemplateResponse('trade.html', {'request':request, 'data':df.to_dict(orient='records'),
+                    'teams':teams, 'lima':opt, 'opt_pos':opt_pos, 'ros_totals': ros_totals,
+                    'lg':lg.to_dict(orient='records'),
+                    })

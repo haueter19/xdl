@@ -14,6 +14,7 @@
         <script>
             var data = {{ json|safe }};
             var owners = {{ owners_json|safe }};
+            var owner_list = {{ owner_list|safe }};
             var paid_hist_data = {{ paid_histogram_data|safe }};
         </script>
         <script src="/static/js_functions.js"></script>
@@ -26,8 +27,8 @@
     <body>
         <div class="row border-bottom border-3 border-primary p-3">
             <div class="col-md-2">
-                <form action="/fantasy/draft/update_bid" onsubmit="return validateForm()" id="bid_form" method="get">
-                    <h3>Auction Bid Submit</h3>
+                <form action="/draft/update_bid" onsubmit="return validateForm()" id="bid_form" method="get">
+                    <h3>Player Search</h3>
                     <input id="player_select" class="form-control" list="player_list" name="playerid">
                     <datalist id="player_list">
                         {% for i, row in players.iterrows() %}
@@ -35,87 +36,43 @@
                         {% endfor %}
                     </datalist>
                     <br>
-                    <table style="font-size:12px" id="team_input">
-                        <tr>
-                            <td>
-                                <input type="radio" id="team2" name="owner" value="Brewbirds">
-                                <label for="team2">Brewbirds</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team3" name="owner" value="Charmer">
-                                <label for="team3">Charmer</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team4" name="owner" value="Dirty Birds">
-                                <label for="team4">Dirty Birds</label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                <input type="radio" id="team5" name="owner" value="Harvey">
-                                <label for="team5">Harvey</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team6" name="owner" value="Lil Trump">
-                                <label for="team6">Lil Trump</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team7" name="owner" value="Lima Time">
-                                <label for="team7">Lima Time</label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                <input type="radio" id="team8" name="owner" value="Midnight">
-                                <label for="team8">Midnight</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team10" name="owner" value="Roid Ragers">
-                                <label for="team10">Roiders</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team11" name="owner" value="Trouble">
-                                <label for="team11">Trouble</label>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>
-                                <input type="radio" id="team9" name="owner" value="Ugly Spuds">
-                                <label for="team9">Ugly Spuds</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team12" name="owner" value="Wu-Tang">
-                                <label for="team12">Wu-Tang</label>
-                            </td>
-                            <td>
-                                <input type="radio" id="team13" name="owner" value="Young Guns">
-                                <label for="team13">Young Guns</label>
-                            </td>
-                        </tr>
-                        
-                    </table>
-                    <br>
-                    <label for="price">Auction Price</label>
-                    <input type="text" name="price" id="price_entry" size="1" placeholder="Price" value=1>
-                    <button id="submit">Record Bid</button><br><br>
-                    <button id="update_bid">Update Bid</button>
-                    <a href="/fantasy/draft/reset_all"><s>Reset</s></a>
+                    <div style="font-size:12px" id="team_input">
+
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-5">
+                            <label for="price">Price</label>
+                            <br><input type="text" name="price" id="price_entry" size="2" placeholder="Price" value=0>
+                            <button type="submit" class='btn btn-sm btn-primary' id="submit">Bid</button>        
+                        </div>
+                        <div class="col-5">
+                            <label for="price">Supp</label>
+                            <br><input type="text" name="supp" id="supp_entry" size="2" placeholder="#" value="0">
+                            <button type="submit" class='btn btn-sm btn-warning' id="supp_submit">Supp</button>
+                        </div>
+                        <div class="col-2">
+                            <br><a style='float:right' href="/draft/reset_all9"><s>Reset</s></a>
+                        </div>
+                    </div>
                 </form>
                 <div class="text-danger" id="error_msg" style="display:none;"></div>
             </div>
+            <!-- Similar Players Pane -->
             <div class="col-md-2 mb-3 border-start border-dark">
                 <h5>Similar Players by Projected Stats</h5>
                 <div id="sims"></div>
             </div>
+            <!-- Radar Chart Pane -->
             <div class="col-md-2 border-start border-dark mb-2">
                 <h5 id=radar_chart_player_name>Radar Chart</h5>
                 <div id="radar_chart"></div>
             </div>
-            <div class='col-md-6 mb-2 border-start border-dark' id="player_stats_window">
-                
-            </div>
+            <!-- Player Stats Pane -->
+            <div class='col-md-6 mb-2 border-start border-dark' id="player_stats_window"></div>
         </div>
+        <!-- 2nd Row -->
         <div class="row p-3">
+            <!-- Drafted Players Scroll Pane -->
             <div class="col-md-2" style="height:500px; overflow-y:scroll;">
                 <h3>Draft Order</h3>
                 <table id="drafted_scroll" style="width:100%; font-size:12px;">
@@ -128,6 +85,7 @@
                     {% endfor %}
                 </table>
             </div>
+            <!-- Owners Cash Meter Pane -->
             <div class="col-md-1 border-start border-dark">
                 <h4>Cash Meter</h4>
                 <table>
@@ -142,11 +100,13 @@
                     </tr>
                     {% endfor %}
                 </table>
+                <b>Inflation Factor:</b><br><font color='red'>{{ inflation_factor }}</font><br>
                 Players Left:<br>{{ players_left }}<br>
                 Dollars Left:<br>{{ dollars_left }}<br>
                 Initial $/z:<br>{{ init_dollars_per_z }}<br>
                 Current $/z:<br>{{ current_dollars_per_z }}<br>
             </div>
+            <!-- Main 2nd Row Pane with Tabs -->
             <div class="col-md-9 border-start border-dark">
                 <ul class="nav nav-tabs">
                     <li class="nav-item">
@@ -170,30 +130,36 @@
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#team_z">Total Z</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#surplus">Surplus</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#stat_tiers">Stat Tiers</a>
+                    </li>
                   </ul>
                   <div class="tab-content">
                     <div class="tab-pane container" id="summary">
                         <table class="table table-condensed table-hover" id="myTable" style="font-size:12px;">
                             <thead>
-                                <th onclick="sortTable(0)">Owner</th>
-                                <th onclick="sortTable(1)">Cash Sitch</th>
-                                <th onclick="sortTable(2)">$ Left</th>
-                                <th onclick="sortTable(3)">$ Left/Plyr</th>
-                                <th onclick="sortTable(4)">Drafted</th>
-                                <th onclick="sortTable(5)">Value+/-</th>
-                                <th onclick="sortTable(6)">Pts</th>
-                                <th onclick="sortTable(7)">Rank</th>
-                                <th onclick="sortTable(8)">$/Unit</th>
-                                <th onclick="sortTable(9)">BA</th>
-                                <th onclick="sortTable(10)">HR</th>
-                                <th onclick="sortTable(11)">R</th>
-                                <th onclick="sortTable(12)">RBI</th>
-                                <th onclick="sortTable(13)">SB</th>
-                                <th onclick="sortTable(14)">ERA</th>
-                                <th onclick="sortTable(15)">WHIP</th>
-                                <th onclick="sortTable(16)">W</th>
-                                <th onclick="sortTable(17)">SO</th>
-                                <th onclick="sortTable(18)">Sv+Hld</th>
+                                <th onclick="sortTable(0, 'myTable')">Owner</th>
+                                <th onclick="sortTable(1, 'myTable')">Cash Sitch</th>
+                                <th onclick="sortTable(2, 'myTable')">$ Left</th>
+                                <th onclick="sortTable(3, 'myTable')">$ Left/Plyr</th>
+                                <th onclick="sortTable(4, 'myTable')">Drafted</th>
+                                <th onclick="sortTable(5, 'myTable')">Value+/-</th>
+                                <th onclick="sortTable(6, 'myTable')">Pts</th>
+                                <th onclick="sortTable(7, 'myTable')">Rank</th>
+                                <th onclick="sortTable(8, 'myTable')">$/Unit</th>
+                                <th onclick="sortTable(9, 'myTable')">BA</th>
+                                <th onclick="sortTable(10, 'myTable')">HR</th>
+                                <th onclick="sortTable(11, 'myTable')">R</th>
+                                <th onclick="sortTable(12, 'myTable')">RBI</th>
+                                <th onclick="sortTable(13, 'myTable')">SB</th>
+                                <th onclick="sortTable(14, 'myTable')">ERA</th>
+                                <th onclick="sortTable(15, 'myTable')">WHIP</th>
+                                <th onclick="sortTable(16, 'myTable')">W</th>
+                                <th onclick="sortTable(17, 'myTable')">SO</th>
+                                <th onclick="sortTable(18, 'myTable')">Sv+Hld</th>
                                 
                             </thead>
                         {% for i, row in owners_df.iterrows() %}
@@ -220,6 +186,9 @@
                             </tr>
                         {% endfor %}
                         </table>
+                        {% for key, value in avg_stats.items() %}
+                            <br>{{ key }}: {{ value }}
+                        {% endfor %}
                     </div>
                     <div class="tab-pane container fade" id="rosters">
                         <table class='table table-condensed table-hover' id="rosterTable" style="font-size:10px;">
@@ -229,9 +198,9 @@
                                 <th>Charmer</th>
                                 <th>DB's</th>
                                 <th>Harvey</th>
-                                <th>Lil T</th>
                                 <th><font color='blue'>Lima</font></th>
-                                <th>Midnight</th>
+                                <th>Madness</th>
+                                <th>Mother</th>
                                 <th>Ragers</th>
                                 <th>Trouble</th>
                                 <th>Ugly Spuds</th>
@@ -240,14 +209,14 @@
                             </thead>
                             {% for i, row in roster.iterrows() %}
                                 <tr>
-                                    <td>{{ i }}</td>
+                                    <td><b>{{ i }}</b></td>
                                     <td>{{ row['Brewbirds'] }}</td>
                                     <td>{{ row['Charmer'] }}</td>
                                     <td>{{ row['Dirty Birds'] }}</td>
                                     <td>{{ row['Harvey'] }}</td>
-                                    <td>{{ row['Lil Trump'] }}</td>
                                     <td><b>{{ row['Lima Time'] }}</b></td>
-                                    <td>{{ row['Midnight'] }}</td>
+                                    <td>{{ row['Madness'] }}</td>
+                                    <td>{{ row['Mother'] }}</td>
                                     <td>{{ row['Roid Ragers'] }}</td>
                                     <td>{{ row['Trouble'] }}</td>
                                     <td>{{ row['Ugly Spuds'] }}</td>
@@ -277,32 +246,123 @@
                     <div class="tab-pane container fade pt-4" id="team_z">
                         <table class="table table-condensed table-hover" id="z_table" style="font-size:12px;">
                             <thead>
-                                <th onclick="sortTable(0)">Owner</th>
-                                <th onclick="sortTable(1)">HR</th>
-                                <th onclick="sortTable(2)">SB</th>
-                                <th onclick="sortTable(3)">R</th>
-                                <th onclick="sortTable(4)">RBI</th>
-                                <th onclick="sortTable(5)">BA</th>
-                                <th onclick="sortTable(6)">W</th>
-                                <th onclick="sortTable(7)">K</th>
-                                <th onclick="sortTable(8)">Sv+Hld</th>
-                                <th onclick="sortTable(9)">ERA</th>
-                                <th onclick="sortTable(10)">WHIP</th>                                
+                                <th onclick="sortTable(0, 'z_table')">Owner</th>
+                                <th onclick="sortTable(1, 'z_table')">HR</th>
+                                <th onclick="sortTable(2, 'z_table')">SB</th>
+                                <th onclick="sortTable(3, 'z_table')">R</th>
+                                <th onclick="sortTable(4, 'z_table')">RBI</th>
+                                <th onclick="sortTable(5, 'z_table')">BA</th>
+                                <th onclick="sortTable(6, 'z_table')">W</th>
+                                <th onclick="sortTable(7, 'z_table')">K</th>
+                                <th onclick="sortTable(8, 'z_table')">Sv+Hld</th>
+                                <th onclick="sortTable(9, 'z_table')">ERA</th>
+                                <th onclick="sortTable(10, 'z_table')">WHIP</th>                                
                             </thead>
                         {% for i, row in team_z.iterrows() %}
-                            <tr>
-                                <td>{{ row['Owner'] }}</td>
-                                <td>{{ row['zHR'] }}</td>
-                                <td>{{ row['zSB'] }}</td>
-                                <td>{{ row['zR'] }}</td>
-                                <td>{{ row['zRBI'] }}</td>
-                                <td>{{ row['zBA'] }}</td>
-                                <td>{{ row['zW'] }}</td>
-                                <td>{{ row['zSO'] }}</td>
-                                <td>{{ row['zSv+Hld'] }}</td>
-                                <td>{{ row['zERA'] }}</td>
-                                <td>{{ row['zWHIP'] }}</td>
-                            </tr>
+                        <tr id="z_table_{{ row['Owner'] }}">
+                            <td>{{ row['Owner'] }}</td>
+                            <td>{{ row['zHR'] }}</td>
+                            <td>{{ row['zSB'] }}</td>
+                            <td>{{ row['zR'] }}</td>
+                            <td>{{ row['zRBI'] }}</td>
+                            <td>{{ row['zBA'] }}</td>
+                            <td>{{ row['zW'] }}</td>
+                            <td>{{ row['zSO'] }}</td>
+                            <td>{{ row['zSv+Hld'] }}</td>
+                            <td>{{ row['zERA'] }}</td>
+                            <td>{{ row['zWHIP'] }}</td>
+                        </tr>
+                        {% endfor %}
+                        </table>
+                    </div>
+                    <div class="tab-pane container fade pt-4" id="surplus">
+                        <table class="table table-condensed table-hover" id="surplus_tbl" style="font-size:12px;">
+                            <thead>
+                                <th>Player</th>
+                                <th>Team</th>
+                                <th>Pos</th>
+                                <th>Surplus</th>
+                                <th>Market</th>
+                                <th>Value</th>
+                                <th>CBS</th>
+                                <th>BA</th>
+                                <th>HR</th>
+                                <th>SB</th>
+                                <th>R</th>
+                                <th>RBI</th>
+                                <th>ERA</th>
+                                <th>WHIP</th>
+                                <th>K</th>
+                                <th>W</th>
+                                <th>Sv+Hld</th>
+                            </thead>
+                        {% for i, row in players[(players['Owner'].isna())].sort_values('surplus', ascending=False).iterrows() %}
+                        <tr>
+                            <td>{{ row['Name'] }}</td>
+                            <td>{{ row['Team'] }}</td>
+                            <td>{{ row['Pos'] }}</td>
+                            <td><b>{{ row['surplus'] }}</b></td>
+                            <td>{{ row['curValue'] }}</td>
+                            <td>{{ row['Value'] }}</td>
+                            <td>{{ row['CBS'] }}</td>
+                            <td>{{ row['BA'] }}</td>
+                            <td>{{ row['HR'] }}</td>
+                            <td>{{ row['SB'] }}</td>
+                            <td>{{ row['R'] }}</td>
+                            <td>{{ row['RBI'] }}</td>
+                            <td>{{ row['ERA'] }}</td>
+                            <td>{{ row['WHIP'] }}</td>
+                            <td>{{ row['SO'] }}</td>
+                            <td>{{ row['W'] }}</td>
+                            <td>{{ row['Sv+Hld'] }}</td>
+
+                        </tr>
+                        {% endfor %}
+                        </table>
+                    </div>
+
+                    <div class="tab-pane container fade pt-4" id="stat_tiers">
+                        <table class="table table-condensed table-hover" id="stat_tiers_tbl" style="font-size:12px;">
+                            <thead>
+                                <th>Player</th>
+                                <th>Team</th>
+                                <th>Pos</th>
+                                <th onclick="sortTable(3, 'stat_tiers_tbl')">Surplus</th>
+                                <th onclick="sortTable(4, 'stat_tiers_tbl')">Market</th>
+                                <th onclick="sortTable(5, 'stat_tiers_tbl')">Value</th>
+                                <th onclick="sortTable(6, 'stat_tiers_tbl')">CBS</th>
+                                <th onclick="sortTable(7, 'stat_tiers_tbl')">BA</th>
+                                <th onclick="sortTable(8, 'stat_tiers_tbl')">HR</th>
+                                <th onclick="sortTable(9, 'stat_tiers_tbl')">SB</th>
+                                <th onclick="sortTable(10, 'stat_tiers_tbl')">R</th>
+                                <th onclick="sortTable(11, 'stat_tiers_tbl')">RBI</th>
+                                <th onclick="sortTable(12, 'stat_tiers_tbl')">ERA</th>
+                                <th onclick="sortTable(13, 'stat_tiers_tbl')">WHIP</th>
+                                <th onclick="sortTable(14, 'stat_tiers_tbl')">K</th>
+                                <th onclick="sortTable(15, 'stat_tiers_tbl')">W</th>
+                                <th onclick="sortTable(16, 'stat_tiers_tbl')">Sv+Hld</th>
+                            </thead>
+                        {% for i, row in players[players['Owner'].isna()].sort_values('z', ascending=False).iloc[:440].iterrows() %}
+                        <tr>
+                            <td>{{ row['Name'] }}</td>
+                            <td>{{ row['Team'] }}</td>
+                            <td>{{ row['Pos'] }}</td>
+                            <td><b>{{ row['surplus'] }}</b></td>
+                            <td>{{ row['curValue'] }}</td>
+                            <td>{{ row['Value'] }}</td>
+                            <td>{{ row['CBS'] }}</td>
+                            <td>{{ row['BA'] }}</td>
+                            <td>{{ row['HR'] }}</td>
+                            <td>{{ row['SB'] }}</td>
+                            <td>{{ row['R'] }}</td>
+                            <td>{{ row['RBI'] }}</td>
+                            <td>{{ row['ERA'] }}</td>
+                            <td>{{ row['WHIP'] }}</td>
+                            <td>{{ row['SO'] }}</td>
+                            <td>{{ row['W'] }}</td>
+                            <td>{{ row['Sv+Hld'] }}</td>
+
+                        </tr>
                         {% endfor %}
                         </table>
                     </div>

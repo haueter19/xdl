@@ -35,12 +35,16 @@ $.fn.z_players = function(){
     $.each(data, function(i, v){
         if (j<440){
             x_data.push(j);
-            y_data.push(data[i]['Value']);
-            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['playerid']+'<br>Value: $'+data[i]['Value']);
+            y_data.push(data[i]['curValue']);
+            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['playerid']+'<br>Value: $'+data[i]['Value']+'<br>Market: $'+data[i]['curValue']);
             if (data[i]['Owner']){
                 color_map.push('gray');
             } else {
-                color_map.push('lightblue');
+                if (data[i]['surplus']>6){
+                    color_map.push('green');
+                } else {
+                    color_map.push('lightblue');
+                }
             }
         }
         j += 1
@@ -54,7 +58,7 @@ $.fn.z_players = function(){
             text:hover_data,
             mode:'markers',
             customtext:p_id,
-            marker: { color: color_map },
+            marker: { color: color_map, size:8, opacity:.6, line:{color:'black', width:1} },
             hovertemplate: "%{text}"
             
         }
@@ -71,14 +75,18 @@ $.fn.tiers = function(){
     let color_map = [];
     var j = 0;
     $.each(data, function(i, v){
-        if (v.z>-1.5){
+        if (v.z>-2.5){
             x_data.push(v.Primary_Pos);
-            y_data.push(data[i]['Value']);
-            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['playerid']+'<br>Market Value: $'+data[i]['Value']);
+            y_data.push(data[i]['curValue']);
+            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['playerid']+'<br>Value: $'+data[i]['Value']+'<br>Market Value: $'+data[i]['curValue']);
             if (data[i]['Owner']){
                 color_map.push('gray');
             } else {
-                color_map.push('lightblue');
+                if (data[i]['surplus']>6){
+                    color_map.push('green');
+                } else {
+                    color_map.push('lightblue');
+                }
             }
         }
         //j += 1
@@ -93,7 +101,7 @@ $.fn.tiers = function(){
             //hovermode:'closest',
             mode:'markers',
             customtext:p_id,
-            marker: { color: color_map },
+            marker: { color: color_map, opacity:.6, size:10, line:{color:'gray', width:1}},
             hovertemplate: "%{text}"
             
         }
@@ -155,7 +163,7 @@ $.fn.update_player_stats_window = function(selected_index){
     +'</tr></table><br>'
     
     if ((data[selected_index]['Primary_Pos']=='SP') || (data[selected_index]['Primary_Pos']=='RP')){
-        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>W</th><th>S+H</th><th>FIP</th><th>HR/9</th><th>K/9</th><th>BB/9</th><th>K%</th><th>BB%</th><th>SIERA</th><th>ERA-</th><th>CSW%</th><th>FBv</th></thead></tr>'
+        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>W</th><th>S+H</th><th>FIP</th><th>HR/9</th><th>K/9</th><th>BB/9</th><th>K%</th><th>BB%</th></thead></tr>'
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['IP']+'</td>'
         +'<td>'+data[selected_index]['ERA']+'</td>'
@@ -163,7 +171,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SO']+'</td>'
         +'<td>'+data[selected_index]['W']+'</td>'
         +'<td>'+data[selected_index]['Sv+Hld']+'</td>'
-        +'</tr><tr><td>2022</td>'
+        +'</tr><tr><td>2023</td>'
         +'<td>'+data[selected_index]['IP_ly']+'</td>'
         +'<td>'+data[selected_index]['ERA_ly']+'</td>'
         +'<td>'+data[selected_index]['WHIP_ly']+'</td>'
@@ -176,13 +184,9 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['BB/9']+'</td>'
         +'<td>'+data[selected_index]['K%']+'</td>'
         +'<td>'+data[selected_index]['BB%']+'</td>'
-        +'<td>'+data[selected_index]['SIERA']+'</td>'
-        +'<td>'+data[selected_index]['ERA-']+'</td>'
-        +'<td>'+data[selected_index]['CSW%']+'</td>'
-        +'<td>'+data[selected_index]['FBv']+'</td>'
         +'</tr></table>'
     } else {
-        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>PA</th><th>xwOBA</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>Brl%</th><th>BB%</th><th>K%</th><th>Cont%</th><th>O-Swing%</th><th>HardHit%</th><th>maxEV</th><th>EV</th></thead></tr>'
+        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>PA</th><th>xwOBA</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>Brl%</th><th>BB%</th><th>K%</th><th>Cont%</th></thead></tr>'
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['PA']+'</td>'
         +'<td>-</td><td>-</td>'
@@ -204,10 +208,6 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['BB%']+'</td>'
         +'<td>'+data[selected_index]['K%']+'</td>'
         +'<td>'+data[selected_index]['Contact%']+'</td>'
-        +'<td>'+data[selected_index]['O-Swing%']+'</td>'
-        +'<td>'+data[selected_index]['HardHit%']+'</td>'
-        +'<td>'+data[selected_index]['maxEV']+'</td>'
-        +'<td>'+data[selected_index]['EV']+'</td>'
         +'</tr></table>'
     }
     
@@ -272,6 +272,23 @@ function bid_amounts(id){
 }
 
 $(document).ready(function(){
+    var el = $("#team_input")
+    t = `<div class="row">`
+    c = 1;
+    for (let tm of owner_list){
+    if (c==3 | c==6 | c==9 | c==12){
+        t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
+            <label for="team${c}">${tm}</label></div></div><div class="row">`
+        c+=1;
+    } else {
+        t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
+            <label for="team${c}">${tm}</label></div>`
+        c += 1;
+    }
+    }
+    t +=  `</div>`
+    el.html(t)
+
     $("#projected_stats_table tr").hide();
     $("#projected_stats_table tr:first").show();
     $("#statcast_stats_table tr").hide();
@@ -301,20 +318,35 @@ $(document).ready(function(){
         var player_id = $("input[name='playerid']").val();
         var bid_winner = $('input[name="owner"]:checked').val();
         var price_val = $("#price_entry").val();
+        var supp_round = $("#supp_entry").val();
+
         if (player_id==""){
-            alert(player_id);
+            alert("Must select a player");
             $("#error_msg").text('Choose a player').show();
             return false;
         }
         if (!bid_winner){
+            alert('Must select an owner');
             $("#error_msg").text('Choose a team').show();
             return false;
         }
-        if (price_val<0) {
-            $("#error_msg").text('Enter a price').show();
+        if (price_val<0 | price_val=='') {
+            alert('Must select a valid price')
+            $("#error_msg").text('Enter a valid price').show();
+            return false;
+        }
+        if (supp_round < 0 | supp_round > 10){
+            alert('Must select a supp round 0 to 10')
+            $("#error_msg").text('Enter a valid supp').show();
+            return false;
+        }
+        if (price_val >0 & supp_round > 0){
+            alert(`Either price or supp must be 0`);
+            $("#error_msg").text('Either price or supp must be 0').show();
             return false;
         }
     })
+    
     $("#button").click(function(){
         var v = $("#player_list").val();
         $.get("/draft/"+v, function(data, status){
@@ -365,6 +397,35 @@ $(document).ready(function(){
             }
         });
     });
+    $("#surplus").on("click", "td", function() {
+        var p_name = $(this).text();
+        $.each(data, function(i, v) {
+            if (v.Name == p_name) {
+                var tr_id = v.playerid
+                $("#player_select").val(tr_id);
+                $(this).create_radar_chart(tr_id);
+                bid_amounts(tr_id);
+                return tr_id;
+            }
+        });
+    });
+    $("#stat_tiers").on("click", "td", function() {
+        var p_name = $(this).text();
+        $.each(data, function(i, v) {
+            if (v.Name == p_name) {
+                var tr_id = v.playerid
+                $("#player_select").val(tr_id);
+                $(this).create_radar_chart(tr_id);
+                bid_amounts(tr_id);
+                return tr_id;
+            }
+        });
+    });
+    // Using jQuery to select the <tr> by id and then find all <td> elements within it
+    // Selecting an element with a space in its id attribute using attribute selector
+    $('[id="z_table_Lima Time"]').find('td').css('font-weight', 'bold');
+    $('[id="z_table_Lima Time"]').find('td').css('color', 'blue');
+
 
     document.getElementById("z_players_chart").on('plotly_click', function(data){
         var txt = data.points[0].text.split("<br>")
