@@ -19,7 +19,7 @@ name_change = {"9 Gran...":'Madness', 'Brewbi...':'Brewbirds', 'Charme...':'Char
                'Lima T...':'Lima Time', 'Roid R...':'Roiders', 'Troubl...':'Trouble', 'Ugly S...':'Ugly Spuds', 'Wiscom...':'Wu Tang', 'Young ...':'Young Guns'}
 position_priority = ['C', '2B', '3B', 'SS', 'OF', '1B', 'MI', 'CI', 'DH', 'SP', 'RP']
 
-opening_week = int(datetime.strftime(pd.Timestamp('2023-03-30'), '%W')) - 1
+opening_week = int(datetime.strftime(pd.Timestamp('2024-03-18'), '%W')) - 1
 
 def clean_table(df, num):
     df = df.copy()
