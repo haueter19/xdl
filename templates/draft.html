@@ -29,10 +29,10 @@
             <div class="col-md-2">
                 <form action="/draft/update_bid" onsubmit="return validateForm()" id="bid_form" method="get">
                     <h3>Player Search</h3>
-                    <input id="player_select" class="form-control" list="player_list" name="playerid">
+                    <input id="player_select" class="form-control" list="player_list" name="cbsid">
                     <datalist id="player_list">
                         {% for i, row in players.iterrows() %}
-                            <option value="{{ row['playerid'] }}">{{ row['Name'] }}</option>
+                            <option value="{{ row['cbsid'] }}">{{ row['Name'] }}</option>
                         {% endfor %}
                     </datalist>
                     <br>
@@ -51,7 +51,7 @@
                             <button type="submit" class='btn btn-sm btn-warning' id="supp_submit">Supp</button>
                         </div>
                         <div class="col-2">
-                            <br><a style='float:right' href="/draft/reset_all9"><s>Reset</s></a>
+                            <br><a style='float:right' href="/draft/reset_all"><s>Reset</s></a>
                         </div>
                     </div>
                 </form>
@@ -182,7 +182,7 @@
                                 <td>{{ row['WHIP'] }}</td>
                                 <td>{{ row['W'] }}</td>
                                 <td>{{ row['SO'] }}</td>
-                                <td>{{ row['Sv+Hld'] }}</td>
+                                <td>{{ row['SvHld'] }}</td>
                             </tr>
                         {% endfor %}
                         </table>
@@ -254,7 +254,7 @@
                                 <th onclick="sortTable(5, 'z_table')">BA</th>
                                 <th onclick="sortTable(6, 'z_table')">W</th>
                                 <th onclick="sortTable(7, 'z_table')">K</th>
-                                <th onclick="sortTable(8, 'z_table')">Sv+Hld</th>
+                                <th onclick="sortTable(8, 'z_table')">SvHld</th>
                                 <th onclick="sortTable(9, 'z_table')">ERA</th>
                                 <th onclick="sortTable(10, 'z_table')">WHIP</th>                                
                             </thead>
@@ -268,7 +268,7 @@
                             <td>{{ row['zBA'] }}</td>
                             <td>{{ row['zW'] }}</td>
                             <td>{{ row['zSO'] }}</td>
-                            <td>{{ row['zSv+Hld'] }}</td>
+                            <td>{{ row['zSvHld'] }}</td>
                             <td>{{ row['zERA'] }}</td>
                             <td>{{ row['zWHIP'] }}</td>
                         </tr>
@@ -294,7 +294,7 @@
                                 <th>WHIP</th>
                                 <th>K</th>
                                 <th>W</th>
-                                <th>Sv+Hld</th>
+                                <th>SvHld</th>
                             </thead>
                         {% for i, row in players[(players['Owner'].isna())].sort_values('surplus', ascending=False).iterrows() %}
                         <tr>
@@ -314,7 +314,7 @@
                             <td>{{ row['WHIP'] }}</td>
                             <td>{{ row['SO'] }}</td>
                             <td>{{ row['W'] }}</td>
-                            <td>{{ row['Sv+Hld'] }}</td>
+                            <td>{{ row['SvHld'] }}</td>
 
                         </tr>
                         {% endfor %}
@@ -340,7 +340,7 @@
                                 <th onclick="sortTable(13, 'stat_tiers_tbl')">WHIP</th>
                                 <th onclick="sortTable(14, 'stat_tiers_tbl')">K</th>
                                 <th onclick="sortTable(15, 'stat_tiers_tbl')">W</th>
-                                <th onclick="sortTable(16, 'stat_tiers_tbl')">Sv+Hld</th>
+                                <th onclick="sortTable(16, 'stat_tiers_tbl')">SvHld</th>
                             </thead>
                         {% for i, row in players[players['Owner'].isna()].sort_values('z', ascending=False).iloc[:440].iterrows() %}
                         <tr>
@@ -360,7 +360,7 @@
                             <td>{{ row['WHIP'] }}</td>
                             <td>{{ row['SO'] }}</td>
                             <td>{{ row['W'] }}</td>
-                            <td>{{ row['Sv+Hld'] }}</td>
+                            <td>{{ row['SvHld'] }}</td>
 
                         </tr>
                         {% endfor %}

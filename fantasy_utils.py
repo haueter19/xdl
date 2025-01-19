@@ -1,6 +1,7 @@
 import pandas as pd
 import math
 from datetime import datetime
+import re
 from sqlalchemy import create_engine
 
 tm_players, tm_dollars = 23, 260
@@ -39,7 +40,7 @@ class Fantasy_Projections():
         self.quals = None
         #self.qual_p = None
         
-        self.proj_systems = ['atc', 'thebat', 'dc', 'steamer', 'zips']
+        self.proj_systems = ['atc', 'thebat', 'fangraphsdc', 'steamer', 'zips']
         self.pos_hierarchy = ['C', '2B', '3B', 'SS', 'OF', '1B', 'DH', 'SP', 'RP', 'P']
         self.keepers_url = 'https://docs.google.com/spreadsheets/d/1dwDC2uMsfVRYeDECKLI0Mm_QonxkZvTkZTfBgnZo7-Q/edit#gid=1723951361'
 
@@ -61,12 +62,12 @@ class Fantasy_Projections():
         
         :returns: highest position from the pos_hierarchy list
         """
-        pos_list = p.split('/')
+        pos_list = re.split('[,/]', p)
         for i in self.pos_hierarchy:
             if i in pos_list:
                 return i
 
-    def get_qual_avgs(self, previous_season_stats_hitter, previous_season_stats_pitcher, yr=datetime.now().year, min_pa=440, sp_min_ip=140, rp_ip_range=[48,90], min_sv_hld=5):
+    def get_qual_avgs(self, previous_season_stats_hitter, previous_season_stats_pitcher, yr=datetime.now().year, min_pa=440, sp_min_ip=130, rp_ip_range=[45,95], min_sv_hld=5):
         """
         Accepts a dataset and some parameters for filtering that dataset. Finds the average and standard deviation for various hitting 
         and pitching categories. The idea is to get a baseline for what an average good player did the previous season. Projections will
@@ -78,31 +79,42 @@ class Fantasy_Projections():
             for stat in ['PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB']:
                 assert stat in previous_season_stats_hitter.columns
         else:
-            previous_season_stats_hitter = pd.read_csv('data/'+str(yr-1)+'-final-stats-h.csv', encoding='latin1').sort_values('PA', ascending=False)
-        
+            previous_season_stats_hitter = pd.read_csv('data/'+str(yr-1)+'-final-stats-h.csv', encoding='latin1')
+            previous_season_stats_hitter['PA'] = previous_season_stats_hitter['AB']+previous_season_stats_hitter['BB']
+            previous_season_stats_hitter = previous_season_stats_hitter.query('PA>0')
+            previous_season_stats_hitter = previous_season_stats_hitter.sort_values('PA', ascending=False)
+            previous_season_stats_hitter.rename(columns={'Positions':'Pos'},inplace=True)
+            previous_season_stats_hitter['Primary_Pos'] = previous_season_stats_hitter['Pos'].apply(lambda x: self.find_primary_pos(x))
+
         previous_season_stats_hitter = previous_season_stats_hitter[previous_season_stats_hitter['PA']>min_pa]
         lgBA = previous_season_stats_hitter['H'].sum()/previous_season_stats_hitter['AB'].sum()
         previous_season_stats_hitter['zlgBA'] = previous_season_stats_hitter.apply(lambda x: x['H']-(x['AB']*(lgBA)), axis=1)
         quals_h = previous_season_stats_hitter[['H', 'AB', 'PA', 'zlgBA', 'R', 'RBI', 'HR', 'SB']].describe().to_dict()
         
         if isinstance(previous_season_stats_pitcher,pd.DataFrame):
-            for stat in ['BB', 'HA', 'ER', 'IP', 'SO', 'W', 'Sv+Hld']:
+            for stat in ['BB', 'HA', 'ER', 'IP', 'SO', 'W', 'SvHld']:
                 assert stat in previous_season_stats_pitcher.columns
         else:
-            previous_season_stats_pitcher = pd.read_csv('data/'+str(yr-1)+'-final-stats-p.csv', encoding='latin1').sort_values('IP', ascending=False)
+            previous_season_stats_pitcher = pd.read_csv('data/'+str(yr-1)+'-final-stats-p.csv', encoding='latin1')
+            previous_season_stats_pitcher.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'},inplace=True)
+            previous_season_stats_pitcher = previous_season_stats_pitcher.query('IP>0')
+            previous_season_stats_pitcher['SvHld'] = previous_season_stats_pitcher['SV']+previous_season_stats_pitcher['HLD']
+            previous_season_stats_pitcher = previous_season_stats_pitcher.sort_values('IP', ascending=False)
+            previous_season_stats_pitcher.rename(columns={'Positions':'Pos'},inplace=True)
+            previous_season_stats_pitcher['Primary_Pos'] = previous_season_stats_pitcher['Pos'].apply(lambda x: 'RP' if x == None else self.find_primary_pos(x))
         
-        previous_season_stats_pitcher['playerid'] = previous_season_stats_pitcher['playerid'].astype(str)
-        previous_season_stats_pitcher['Sv+Hld'] = previous_season_stats_pitcher['SV']+previous_season_stats_pitcher['HLD']
-        val_p = pd.read_csv('data/'+str(yr)+'-fangraphs-auction-calculator-p.csv')
-        val_p['playerid'] = val_p['playerid'].astype(str)
-        val_p['Primary_Pos'] = val_p['POS'].apply(lambda x: self.find_primary_pos(x))
-        previous_season_stats_pitcher = previous_season_stats_pitcher.merge(val_p[['playerid', 'Primary_Pos']], on='playerid', how='inner')
-        previous_season_stats_pitcher = previous_season_stats_pitcher[(previous_season_stats_pitcher['Primary_Pos']=='RP') & (previous_season_stats_pitcher['IP'].between(rp_ip_range[0],rp_ip_range[1]) & (previous_season_stats_pitcher['Sv+Hld']>min_sv_hld)) | (previous_season_stats_pitcher['Primary_Pos']=='SP') & (previous_season_stats_pitcher['IP']>sp_min_ip)]
+        #previous_season_stats_pitcher['playerid'] = previous_season_stats_pitcher['playerid'].astype(str)
+        #val_p = pd.read_csv('data/'+str(yr)+'-fangraphs-auction-calculator-p.csv')
+        #val_p['playerid'] = val_p['playerid'].astype(str)
+        #val_p['Primary_Pos'] = val_p['POS'].apply(lambda x: self.find_primary_pos(x))
+        #previous_season_stats_pitcher = previous_season_stats_pitcher.merge(val_p[['playerid', 'Primary_Pos']], on='playerid', how='inner')
+        
+        previous_season_stats_pitcher = previous_season_stats_pitcher[(previous_season_stats_pitcher['Primary_Pos']=='RP') & (previous_season_stats_pitcher['IP'].between(rp_ip_range[0],rp_ip_range[1]) & (previous_season_stats_pitcher['SvHld']>min_sv_hld)) | (previous_season_stats_pitcher['Primary_Pos']=='SP') & (previous_season_stats_pitcher['IP']>sp_min_ip)]
         lgERA = previous_season_stats_pitcher['ER'].sum()/previous_season_stats_pitcher['IP'].sum()*9
         lgWHIP = (previous_season_stats_pitcher['BB'].sum()+previous_season_stats_pitcher['HA'].sum())/previous_season_stats_pitcher['IP'].sum()
         previous_season_stats_pitcher['zlgERA'] = previous_season_stats_pitcher.apply(lambda x: ((x['ER']*9) - (x['IP']*lgERA))*-1, axis=1)
         previous_season_stats_pitcher['zlgWHIP'] = previous_season_stats_pitcher.apply(lambda x: ((x['HA']+x['BB'])-(x['IP']*lgWHIP))*-1, axis=1)
-        quals_p = previous_season_stats_pitcher[['BB', 'HA', 'ER', 'IP', 'SO', 'W', 'Sv+Hld', 'zlgERA', 'zlgWHIP']].describe().to_dict()
+        quals_p = previous_season_stats_pitcher[['BB', 'HA', 'ER', 'IP', 'SO', 'W', 'SvHld', 'zlgERA', 'zlgWHIP']].describe().to_dict()
         #quals_p['HA'] = quals_p.pop('H')
         quals_h.update(quals_p)
         self.quals = quals_h
@@ -156,166 +168,159 @@ class Fantasy_Projections():
             df['z_h_ly'] = df['zR_ly']+df['zRBI_ly']+df['zHR_ly']+df['zSB_ly']+df['zBA_ly']
             return df
         else:
-            for stat in ['ERA', 'WHIP', 'SO', 'W', 'Sv+Hld', 'ERA_ly', 'WHIP_ly', 'SO_ly', 'W_ly', 'Sv+Hld_ly']:
+            for stat in ['ERA', 'WHIP', 'SO', 'W', 'SvHld', 'ERA_ly', 'WHIP_ly', 'SO_ly', 'W_ly', 'SvHld_ly']:
                 df['z'+stat] = df.apply(lambda row: self.big_board(row, stat, self.quals), axis=1)
-            df['BIGAAp'] = df['zERA']+df['zWHIP']+df['zW']+df['zSO']+df['zSv+Hld']
-            df['z_p_ly'] = df['zERA_ly']+df['zWHIP_ly']+df['zW_ly']+df['zSO_ly']+df['zSv+Hld_ly']
+            df['BIGAAp'] = df['zERA']+df['zWHIP']+df['zW']+df['zSO']+df['zSvHld']
+            df['z_p_ly'] = df['zERA_ly']+df['zWHIP_ly']+df['zW_ly']+df['zSO_ly']+df['zSvHld_ly']
             return df
-        
     
-    def prep_projection_data(self):
+
+    def preprocess_hitting_projections(self):
         """
-        Function to load various csv files containing projections for the next season. Data is expected to be downloaded from Fangraphs. 
+        Function to load various csv files containing projections for the upcoming season, clean the data, and save it to the class. 
         """
         # Loop through possible projection csv files. Load, if they exist, into a list and then concatenate into a dataframe
-        proj_system_list = []
+        h = pd.DataFrame()
         for proj_file in self.proj_systems:
             try:
-                temp = pd.read_csv('data/'+str(self.yr)+'-'+proj_file+'-proj-h.csv', encoding="latin-1")
-
-                proj_system_list.append(temp)
+                temp = pd.read_csv(f'data/{datetime.now().year}-{proj_file}-proj-h.csv', encoding="latin-1")
+                temp.rename(columns={'SO':'K'},inplace=True)
+                temp['sys'] = proj_file
+                h = pd.concat([h, temp])
+                print(f'Found {proj_file}')
             except:
                 print(f"Did not find file {proj_file}")
                 pass
-    
-        h = pd.concat(proj_system_list).sort_values('PlayerId')
-        h.rename(columns={'PlayerId':'playerid'},inplace=True)
-    
-        # Add Fangraphs auction values. Serves as a reference point to see if my projections seem reasonable
-        try:
-            val_h = pd.read_csv('data/'+str(self.yr)+'-fangraphs-auction-calculator-h.csv')
-            val_h.rename(columns={'PlayerId':'playerid', 'POS':'Pos'},inplace=True)
-            h = h.merge(val_h[['playerid', 'Pos', 'Dollars']])
-        except:
-            h['Dollars'] = 0
-        
-        # Add CBS auction values. Another reference point. Assumption is that lazy owners might only consult this guide.
-        try:
-            cbs = pd.read_csv('data/'+str(self.yr)+'-cbs-values.csv', encoding="latin-1")
-            h = h.merge(cbs[['playerid', 'CBS']], on='playerid', how='left')
-        except:
-            h['CBS'] = 0
 
-        h.drop(columns=['wOBA', 'CS', 'Fld', 'BsR', 'ADP'],inplace=True)        
-        h = h.rename(columns={'ï»¿Name':'Name'})
-        h['Primary_Pos'] = h.apply(lambda x: self.find_primary_pos(x['Pos']), axis=1)
+        h = h.drop(columns='ï»¿Name')
+        h.rename(columns={'NameASCII':'Name', 'PlayerId':'playerid'},inplace=True)
 
-        # With the csv's loaded, we now must collapse the players into one stat line. This pivot table takes the averages
-        proj = pd.pivot_table(h, index='playerid', values=['G', 'PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB'], aggfunc='mean')\
-            .merge(h[['playerid', 'Name', 'Team', 'Pos', 'Primary_Pos', 'Dollars', 'CBS']], on='playerid', how='inner').drop_duplicates()
-        # Helps with sorting later when we need to find the top 12 players at a position. 
+        # Load players table from database
+        players = pd.read_sql('SELECT * FROM players', engine)
+        # Merge the player ID map with the projections dataframe
+        h = h.merge(players[['cbsid', 'CBSNAME', 'IDFANGRAPHS']], left_on='playerid', right_on='IDFANGRAPHS', how='left').sort_values('PA', ascending=False)
+        # Add in cbs projections
+        cbs = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-cbs-proj-h.csv')
+        cbs['sys'] = 'cbs'
+        cbs.rename(columns={'Positions':'Pos'},inplace=True)
+        cbs = cbs.merge(players[['cbsid', 'IDFANGRAPHS']], on='cbsid', how='left')
+        # Merge the cbs projections with the other projections
+        h = pd.concat([h,cbs]).copy()
+        h.fillna({'CBS':0, 'playerid':h['IDFANGRAPHS'], 'Name':h['CBSNAME']},inplace=True)
+        h.drop(columns=['InterSD', 'InterSK', 'IntraSD'],inplace=True)
+        # Compute TB
+        h['TB'] = h['1B'] + (h['2B']*2) + (h['3B']*3) + (h['HR']*4)
+        # There are thousands of projections. I'm going to filter out players who are not projected to get at least 1 AB
+        h = h[(h['AB']>1)]
+        # If I ever want to save these and explore, can use this line
+        h_without_cbsid = h[h['cbsid'].isna()]
+        # Drop rows where cbsid is null
+        h = h[h['cbsid'].notna()]
+        # Collapse projections into one per cbsid and take the average for each stat
+        # Then merge with original dataframe to get the player's name and team
+        # Drop duplicates by cbsid since the previous merge will duplicate rows
+        proj = pd.pivot_table(h, index='cbsid', values=['G', 'PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB', 'BB', 'HBP', 'SF', 'SH', 'TB'], aggfunc='mean')\
+            .merge(h[['cbsid', 'playerid', 'Name', 'Team']], on='cbsid', how='inner').drop_duplicates('cbsid') # drop by cbsid b/c when this is the same, the data avgs for the entries are the same
+        # Helps with sorting later when we need to find the top 12 players at a position.
         proj['sorter'] = proj['HR']+proj['R']+proj['RBI']+proj['H']+proj['SB']
+        # Calculate some rate stats
         proj['BA'] = proj['H']/proj['AB']
-        proj = proj.drop_duplicates(subset='playerid')
-        proj.CBS.fillna(0,inplace=True)
+        proj['OBP'] = (proj['H']+proj['BB']+proj['HBP']) / (proj['AB']+proj['BB']+proj['HBP']+proj['SF'])
+        proj['SLG'] = proj['TB'] / proj['AB']
+        proj['OPS'] = proj['OBP'] + proj['SLG']
+        # Merge with the CBS projections. Because I use a CBS system, every ID and Name and Position should come from there. 
+        # This step brings in the CBS designated position and rank
+        proj = proj.merge(cbs[['cbsid', 'Pos', 'Rank']], how='inner', on='cbsid').drop_duplicates('cbsid')
+        # Add CBS auction values. Serves as a reference point to see if my projections seem reasonable
+        cbs_auction_values = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
+        proj = proj.merge(cbs_auction_values[['cbsid', 'CBS']], on='cbsid', how='left')
+        proj.fillna({'CBS':0},inplace=True)
+        # Merge data with Fangraphs Auction Calculator values
+        proj = proj.merge(pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-fangraphs-auction-calculator-h.csv')[['Dollars', 'PlayerId']], left_on='playerid', right_on='PlayerId', how='left')
+        proj.fillna({'Dollars':0, 'ADP':0},inplace=True)
+        proj.drop(columns='PlayerId',inplace=True)
+        proj = proj.sort_values('sorter', ascending=False)
+        # Find primary position
+        proj['Primary_Pos'] = proj['Pos'].apply(lambda x: self.find_primary_pos(x) if type(x) != float else x)
 
-        # Pitching section ---- repeat similar process
-        proj_system_list = []
+        lyh = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-h.csv', encoding='latin1')
+        lyh.rename(columns={'PA':'PA_ly', 'AB':'AB_ly', 'HR':'HR_ly', 'R':'R_ly', 'RBI':'RBI_ly', 'SB':'SB_ly', 'BB':'BB_ly', 'H':'H_ly', 'AVG':'BA_ly', 'HBP':'HBP_ly'},inplace=True)
+        proj = proj.merge(lyh[['cbsid', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'BB_ly', 'HBP_ly']], on='cbsid',how='left')
+
+        # Save hitting projections to the class
+        self.hitting_data = proj.sort_values('sorter', ascending=False)
+        return proj
+    
+    def preprocess_pitching_projections(self):
+        # Loop through possible projection csv files. Load, if they exist, into a list and then concatenate into a dataframe
+        p = pd.DataFrame()
         for proj_file in self.proj_systems:
             try:
-                temp = pd.read_csv('data/'+str(self.yr)+'-'+proj_file+'-proj-p.csv', encoding="latin-1")
-                proj_system_list.append(temp)
+                temp = pd.read_csv(f'data/{datetime.now().year}-{proj_file}-proj-p.csv', encoding="latin-1")
+                temp.rename(columns={'SO':'K'},inplace=True)
+                temp['sys'] = proj_file
+                p = pd.concat([p, temp])
+                print(f'Found {proj_file}')
             except:
+                print(f"Did not find file {proj_file}")
                 pass
-        p = pd.concat(proj_system_list).sort_values('PlayerId')
-        p.rename(columns={'PlayerId':'playerid'},inplace=True)
-        
-        # Add Fangraphs auction values
-        try:
-            val_p = pd.read_csv('data/'+str(self.yr)+'-fangraphs-auction-calculator-p.csv')
-            val_p.rename(columns={'PlayerId':'playerid', 'POS':'Pos'},inplace=True)
-            p = p.merge(val_p[['playerid', 'Pos', 'Dollars']], how='inner')
-        except:
-            p['Dollars'] = 0
-        
-        
-        # Add CBS values
-        try:
-            p = p.merge(cbs[['playerid', 'CBS']], on='playerid', how='left')
-        except:
-            p['CBS'] = 0
-        
 
-        # Little clean up
-        p.rename(columns={'H':'HA'},inplace=True)
-        p['Sv+Hld'] = p['SV']+p['HLD']
-        p['Primary_Pos'] = p['Pos'].apply(lambda x: ', '.join(x.split('/')))
-        p = p.rename(columns={'ï»¿Name':'Name'})
-
-
-        # Collapse pitchers into one per row
-        pproj = pd.pivot_table(p, index='playerid', values=['GS', 'G', 'IP', 'ER', 'HA', 'SO', 'BB', 'W', 'SV', 'HLD', 'Sv+Hld'], aggfunc='mean')\
-            .merge(p[['playerid', 'Name', 'Team', 'Pos', 'Dollars', 'CBS']], on='playerid', how='inner').drop_duplicates()
-        pproj['sorter'] = pproj['SO']+(pproj['Sv+Hld']*4)+pproj['W']
-        pproj['Primary_Pos'] = pproj.apply(lambda x: self.find_primary_pos(x['Pos']), axis=1)
+        p = p.drop(columns='ï»¿Name')
+        p.rename(columns={'NameASCII':'Name', 'PlayerId':'playerid'},inplace=True)
         
-        pproj['IP'].fillna(0, inplace=True)
-        for i in ['PA', 'AB', 'G', 'H', 'HR', 'R', 'RBI', 'SB']:
-            proj[i].fillna(0,inplace=True)
+        players = pd.read_sql('SELECT * FROM players', engine)
+        p = p.merge(players[['cbsid', 'CBSNAME', 'IDFANGRAPHS']], left_on='playerid', right_on='IDFANGRAPHS', how='left').sort_values('IP', ascending=False)
+
+        # Add in cbs projections
+        temp = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-cbs-proj-p.csv')
+        temp['sys'] = 'cbs'
+        temp.rename(columns={'Positions':'Pos', 'INNs':'IP', 'S':'SV', 'HD':'HLD'},inplace=True)
+        temp['ER'] = temp['ERA']/9*temp['IP']
+        temp = temp.merge(players[['cbsid', 'IDFANGRAPHS']], on='cbsid', how='left')
+
+        p = pd.concat([p,temp]).copy()
+        p = p.drop_duplicates()
+
+        p.fillna({'CBS':0, 'playerid':p['IDFANGRAPHS'], 'Name':p['CBSNAME']},inplace=True)
+        p.drop(columns=['InterSD', 'InterSK', 'IntraSD'],inplace=True)
+        p.rename(columns={'H':'HA', 'K':'SO'},inplace=True)
+        p['SvHld'] = p['SV']+p['HLD']
+
+        p = p[(p['IP']>1)]
+
+        proj = pd.pivot_table(p, index='cbsid', values=['GS', 'G', 'IP', 'ER', 'HA', 'SO', 'BB', 'W', 'SV', 'HLD', 'SvHld'], aggfunc='mean')\
+            .merge(p[['cbsid', 'playerid', 'Name', 'Team']], on='cbsid', how='inner').drop_duplicates('cbsid') # drop by cbsid b/c when this is the same, the data avgs for the entries are the same
+        proj['sorter'] = proj['SO']+(proj['SvHld']*4)+proj['W']
+        for i in ['IP', 'GS', 'G', 'HA', 'SO', 'ER', 'BB', 'W', 'SV', 'HLD', 'SvHld']:
+            proj.fillna({i:0},inplace=True)
             proj[i] = proj[i].apply(lambda x: int(x))
-        for i in ['GS', 'G', 'HA', 'SO', 'ER', 'BB', 'W', 'SV', 'HLD', 'Sv+Hld']:
-            pproj[i].fillna(0,inplace=True)
-            pproj[i] = pproj[i].apply(lambda x: int(x))
-        pproj['ERA'] = pproj['ER']/pproj['IP']*9
-        pproj['WHIP'] = (pproj['HA']+pproj['BB'])/pproj['IP']
-        pproj = pproj.drop_duplicates(subset='playerid')
-        pproj.CBS.fillna(0,inplace=True)
+        proj['ERA'] = proj['ER']/proj['IP']*9
+        proj['WHIP'] = (proj['HA']+proj['BB'])/proj['IP']
+        # Merge data with CBS auction values
+        cbs_auction_values = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
+        proj = proj.merge(cbs_auction_values[['cbsid', 'CBS']], on='cbsid', how='left')
+        proj.fillna({'CBS':0},inplace=True)
+        # Merge data with Fangraphs Auction Calculator values
+        proj = proj.merge(pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-fangraphs-auction-calculator-p.csv')[['Dollars', 'PlayerId']], left_on='playerid', right_on='PlayerId', how='left')
+        proj.fillna({'Dollars':0, 'ADP':0},inplace=True)
+        proj.drop(columns='PlayerId',inplace=True)
+        proj = proj.sort_values('sorter', ascending=False)
+        
+        proj = proj.merge(temp[['cbsid', 'Pos', 'Rank']], how='left', on='cbsid').drop_duplicates('cbsid')
 
+        proj.loc[(proj['Pos'].isna()) & (proj['GS']>0), 'Pos'] = 'SP'
+        proj.fillna({'Pos':'RP'},inplace=True)
+        proj['Primary_Pos'] = proj['Pos'].apply(lambda x: 'SP' if 'SP' in x else 'RP')
 
-        ######## I should refactor this section. Pull this out and use a different function to apply CBSID to data downloaded from Fangraphs ###########
-        # 
-        ids = self.load_id_map()
+        lyp = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-p.csv', encoding='latin1')
+        lyp.rename(columns={'INNs':'IP_ly', 'W':'W_ly', 'ER':'ER_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'HA':'HA_ly', 'BB':'BB_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
+        lyp['SvHld_ly'] = lyp['SV_ly']+lyp['HLD_ly']
 
-        h = proj.merge(ids[['IDFANGRAPHS', 'TEAM', 'CBSNAME']], left_on=['playerid', 'Team'], right_on=['IDFANGRAPHS', 'TEAM'], how='left').drop(columns=['IDFANGRAPHS', 'TEAM'])
-        #h.loc[h['CBSNAME_y'].notna(), 'Name'] = h.loc[h['CBSNAME_y'].notna()]['CBSNAME_y']
-        #h['Name'].fillna(h['CBSNAME_x'],inplace=True)
-        #h['Name'].fillna(h['CBSNAME_y'],inplace=True)
-        #h.drop(columns=['CBSNAME_x', 'CBSNAME_y'],inplace=True)
+        proj = proj.merge(lyp[['cbsid', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'ERA_ly', 'WHIP_ly', 'SvHld_ly', 'W_ly', 'SO_ly']], on='cbsid',how='left')
 
-        p = pproj.merge(ids[['IDFANGRAPHS', 'TEAM', 'CBSNAME']], left_on=['playerid', 'Team'], right_on=['IDFANGRAPHS', 'TEAM'], how='left').drop(columns=['IDFANGRAPHS', 'TEAM'])
-        #p.loc[p['CBSNAME_y'].notna(), 'Name'] = p.loc[p['CBSNAME_y'].notna()]['CBSNAME_y']
-        #p['Name'].fillna(p['CBSNAME_x'],inplace=True)
-        #p['Name'].fillna(p['CBSNAME_y'],inplace=True)
-        #p.drop(columns=['CBSNAME_x', 'CBSNAME_y'],inplace=True)
-
-        # Adding StatCast data
-        try:
-            scb = pd.read_csv('data/'+str(self.yr-1)+'-statcast-h.csv')
-            scb.rename(columns={'IDfg':'playerid', 'PA':'PA_ly', 'HR':'HR_ly', 'R':'R_ly', 'RBI':'RBI_ly', 'SB':'SB_ly', 'AVG':'BA_ly'},inplace=True)
-            scb['playerid'] = scb['playerid'].astype(str)
-            scp = pd.read_csv('data/'+str(self.yr-1)+'-statcast-p.csv')
-            scp.rename(columns={'IDfg':'playerid', 'IP':'IP_ly', 'W':'W_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
-            scp['playerid'] = scp['playerid'].astype(str)
-            scp['Sv+Hld_ly'] = scp['SV_ly']+scp['HLD_ly']
-            sc = pd.concat([scb,scp])
-            h = h.merge(sc[['playerid', 'Age', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'BB%', 'K%', 'Contact%', 'O-Contact%', 'Z-Contact%', 'O-Swing%', 'Z-Swing%', 'Swing%', 'Hard%+', 'Hard%', 'HardHit%', 'EV', 'maxEV', 'LA', 'Barrels', 'Barrel%', 'Events', 'xBA', 'xSLG', 'xwOBA', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'HBP_ly', 'ERA_ly', 'WHIP_ly', 'Sv+Hld_ly', 'W_ly', 'SO_ly', 'CSW%', 'SIERA', 'FIP', 'xFIP', 'xERA', 'ERA-', 'FBv', 'HR/9', 'BB/9']], on='playerid',how='left')
-            p = p.merge(sc[['playerid', 'Age', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'BB%', 'K%', 'Contact%', 'O-Contact%', 'Z-Contact%', 'O-Swing%', 'Z-Swing%', 'Swing%', 'Hard%+', 'Hard%', 'HardHit%', 'EV', 'maxEV', 'LA', 'Barrels', 'Barrel%', 'Events', 'xBA', 'xSLG', 'xwOBA', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'HBP_ly', 'ERA_ly', 'WHIP_ly', 'Sv+Hld_ly', 'W_ly', 'SO_ly', 'CSW%', 'SIERA', 'FIP', 'xFIP', 'xERA', 'ERA-', 'FBv', 'HR/9', 'BB/9']], on='playerid',how='left')
-        except:
-            lyh = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-h.csv', encoding='latin1')
-            lyh.rename(columns={'PlayerID':'playerid', 'PA':'PA_ly', 'AB':'AB_ly', 'HR':'HR_ly', 'R':'R_ly', 'RBI':'RBI_ly', 'SB':'SB_ly', 'BB':'BB_ly', 'H':'H_ly', 'AVG':'BA_ly', 'HBP':'HBP_ly'},inplace=True)
-            lyh['playerid'] = lyh['playerid'].astype(str)
-
-            lyp = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-p.csv', encoding='latin1')
-            lyp.rename(columns={'PlayerID':'playerid', 'IP':'IP_ly', 'W':'W_ly', 'ER':'ER_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'HA':'HA_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
-            lyp['playerid'] = lyp['playerid'].astype(str)
-            lyp['Sv+Hld_ly'] = lyp['SV_ly']+lyp['HLD_ly']
-
-            ly = pd.concat([lyh,lyp])
-            h = h.merge(ly[['playerid', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'BB_ly', 'HBP_ly']], on='playerid',how='left')
-            p = p.merge(ly[['playerid', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'HBP_ly', 'ERA_ly', 'WHIP_ly', 'Sv+Hld_ly', 'W_ly', 'SO_ly']], on='playerid',how='left')
-
-        #
-        h.loc[(h['playerid'].duplicated()) & (h['Primary_Pos'].isin(['C', '1B', '2B', '3B', 'SS', 'OF', 'DH'])), 'keep'] = 0
-        h['keep'].fillna(1,inplace=True)
-        h = h[h['keep']==1]
-
-        p.loc[(p['playerid'].duplicated()) & (p['Primary_Pos'].isin(['SP', 'RP', 'P'])), 'keep'] = 0
-        p['keep'].fillna(1,inplace=True)
-        p = p[p['keep']==1]
-
-        self.hitting_data = h
-        self.pitching_data = p
-        return h, p
+        self.pitching_data = proj.sort_values('sorter', ascending=False)
+        return proj
+    
 
     def calc_value(self, previous_season_hitting=None, previous_season_pitching=None):
         """
@@ -324,7 +329,9 @@ class Fantasy_Projections():
 
         # If hitting and pitching data was not provided, that means we need to create it using the prep_projection_data function
         if self.hitting_data is None:
-            self.prep_projection_data()
+            self.preprocess_hitting_projections()
+        if self.pitching_data is None:
+            self.preprocess_pitching_projections()
 
         #h = self.hitting_data
         #p = self.pitching_data
@@ -382,8 +389,8 @@ class Fantasy_Projections():
         #p.loc[p['Primary_Pos']=='RP', 'Pos_adj'] = rp_adjust
 
         # Apply Positional adjustment
-        h['Pos_adj'] = h['Pos'].apply(lambda x: max([adj_dict[i] for i in x.split('/')]))
-        p['Pos_adj'] = p['Pos'].apply(lambda x: max([adj_dict[i] for i in x.split('/')]))
+        h['Pos_adj'] = h['Pos'].apply(lambda x: max([adj_dict[i] for i in x.split(',')]))
+        p['Pos_adj'] = p['Pos'].apply(lambda x: max([adj_dict[i] for i in x.split(',')]))
         
         h['z'] = h['BIGAAh'] + h['Pos_adj']
         p['z'] = p['BIGAAp'] + p['Pos_adj']
@@ -404,17 +411,21 @@ class Fantasy_Projections():
         b['K/9'] = b['SO']*9/(b['Outs']/3)
         
         print('Adding keepers')
-        kdf = pd.read_csv('data/'+str(self.yr)+'-keepers.csv')
-        kdf['playerid'] = kdf['playerid'].astype(str)
-        b = b.merge(kdf, on='playerid', how='left')
-        b['Paid'].fillna(0,inplace=True)
-        b["Paid"] = pd.to_numeric(b.Paid, downcast='integer')
-        b['Keeper'].fillna(0,inplace=True)
+        try:
+            kdf = pd.read_csv('data/'+str(self.yr)+'-keepers.csv')
+            b = b.merge(kdf, on='cbsid', how='left')
+            b.fillna({'Paid':0},inplace=True)
+            b["Paid"] = pd.to_numeric(b.Paid, downcast='integer')
+            b.fillna({'Keeper':0},inplace=True)
+        except:
+            print('No keepers found')
         
+        b = b.groupby('cbsid').agg({c:"max" for c in b.columns if c != 'cbsid'}).reset_index()
         self.data = b.sort_values('Value', ascending=False)
         print('Completed applying auction values')
         return b.sort_values('Value', ascending=False)
     
+
     def upload(self, tbl):
         from sqlalchemy import create_engine
         engine = create_engine('sqlite:///fantasy_data.db', echo=False)
@@ -534,3 +545,4 @@ def fix_downloaded_cbs_values(year, save=False):
     if save:
         cbs[['playerid', 'Name', 'Pos', 'Team', 'CBS']].to_csv('data/'+str(year)+'-cbs-values.csv',index=False)
     return cbs
+

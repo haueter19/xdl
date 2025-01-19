@@ -1,7 +1,7 @@
 function get_val_from_id(id){
     for (const e of data) {
       // ...use `element`...
-        if (e.playerid==id){
+        if (e.cbsid==id){
             return e.Value;
         };
     };
@@ -36,7 +36,7 @@ $.fn.z_players = function(){
         if (j<440){
             x_data.push(j);
             y_data.push(data[i]['curValue']);
-            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['playerid']+'<br>Value: $'+data[i]['Value']+'<br>Market: $'+data[i]['curValue']);
+            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['cbsid']+'<br>Value: $'+data[i]['Value']+'<br>Market: $'+data[i]['curValue']);
             if (data[i]['Owner']){
                 color_map.push('gray');
             } else {
@@ -78,7 +78,7 @@ $.fn.tiers = function(){
         if (v.z>-2.5){
             x_data.push(v.Primary_Pos);
             y_data.push(data[i]['curValue']);
-            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['playerid']+'<br>Value: $'+data[i]['Value']+'<br>Market Value: $'+data[i]['curValue']);
+            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['cbsid']+'<br>Value: $'+data[i]['Value']+'<br>Market Value: $'+data[i]['curValue']);
             if (data[i]['Owner']){
                 color_map.push('gray');
             } else {
@@ -148,8 +148,8 @@ $.fn.paid_histogram = function(){
 
 $.fn.update_player_stats_window = function(selected_index){
     let tbl_html = '<table class="table" id="player_table">'
-    +'<tr><thead><th>playerid</th><th>Name</th><th>Team</th><th>Pos</th><th>Age</th><th>Proj Value</th><th>Market</th><th>CBS</th><th>FG</th><th>Val_ly</th><th>Z</th></thead></tr>'
-    +'<tr><td>'+data[selected_index]['playerid']+'</td>'
+    +'<tr><thead><th>cbsid</th><th>Name</th><th>Team</th><th>Pos</th><th>Age</th><th>Proj Value</th><th>Market</th><th>CBS</th><th>FG</th><th>Val_ly</th><th>Z</th></thead></tr>'
+    +'<tr><td>'+data[selected_index]['cbsid']+'</td>'
     +'<td>'+data[selected_index]['Name']+'</td>'
     +'<td>'+data[selected_index]['Team']+'</td>'
     +'<td>'+data[selected_index]['Pos']+'</td>'
@@ -170,14 +170,14 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['WHIP']+'</td>'
         +'<td>'+data[selected_index]['SO']+'</td>'
         +'<td>'+data[selected_index]['W']+'</td>'
-        +'<td>'+data[selected_index]['Sv+Hld']+'</td>'
+        +'<td>'+data[selected_index]['SvHld']+'</td>'
         +'</tr><tr><td>2023</td>'
         +'<td>'+data[selected_index]['IP_ly']+'</td>'
         +'<td>'+data[selected_index]['ERA_ly']+'</td>'
         +'<td>'+data[selected_index]['WHIP_ly']+'</td>'
         +'<td>'+data[selected_index]['SO_ly']+'</td>'
         +'<td>'+data[selected_index]['W_ly']+'</td>'
-        +'<td>'+data[selected_index]['Sv+Hld_ly']+'</td>'
+        +'<td>'+data[selected_index]['SvHld_ly']+'</td>'
         +'<td>'+data[selected_index]['FIP']+'</td>'
         +'<td>'+data[selected_index]['HR/9']+'</td>'
         +'<td>'+data[selected_index]['K/9']+'</td>'
@@ -225,7 +225,7 @@ $.fn.create_radar_chart = function(selected){
     $("#"+selected).show();
     $("#"+selected+'_sc').show();
     $.each(data, function(i, v) {
-            if (v.playerid == selected) {
+            if (v.cbsid == selected) {
                 selected_index = i
                 return;
             }
@@ -236,8 +236,8 @@ $.fn.create_radar_chart = function(selected){
     if ((position == 'SP') | (position =='RP')){
         radar_data = [{
             type: 'scatterpolar',
-            r: [data[selected_index]['zERA'], data[selected_index]['zWHIP'], data[selected_index]['zW'], data[selected_index]['zSO'], data[selected_index]['zSv+Hld'], data[selected_index]['zERA']],
-            theta: ['ERA','WHIP','W', 'SO', 'Sv+Hold', 'ERA'],
+            r: [data[selected_index]['zERA'], data[selected_index]['zWHIP'], data[selected_index]['zW'], data[selected_index]['zSO'], data[selected_index]['zSvHld'], data[selected_index]['zERA']],
+            theta: ['ERA','WHIP','W', 'SO', 'SvHld', 'ERA'],
             fill: 'toself'
             }]
     } else {
@@ -297,7 +297,7 @@ $(document).ready(function(){
     $.fn.owners_chart('Owner', '$ Left');
     $.fn.tiers();
     $.fn.paid_histogram();
-    $("input[name='playerid']").on('focusout', function(e){
+    $("input[name='cbsid']").on('focusout', function(e){
         var selected = $(this).val();
         $(this).create_radar_chart(selected);
         bid_amounts(selected);
@@ -315,7 +315,7 @@ $(document).ready(function(){
     });
     $("#bid_form").submit(function(){
         $("#error_msg").hide();
-        var player_id = $("input[name='playerid']").val();
+        var player_id = $("input[name='cbsid']").val();
         var bid_winner = $('input[name="owner"]:checked').val();
         var price_val = $("#price_entry").val();
         var supp_round = $("#supp_entry").val();
@@ -377,7 +377,7 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.playerid
+                var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
                 $(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
@@ -389,7 +389,7 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.playerid
+                var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
                 $(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
@@ -401,7 +401,7 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.playerid
+                var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
                 $(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
@@ -413,7 +413,7 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.playerid
+                var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
                 $(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);

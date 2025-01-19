@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 import shutil
 from sqlalchemy import create_engine
 import time
@@ -20,6 +21,8 @@ class Scraper():
         self.download_path = r'C:\Users\pddnh\Downloads'
         self.downloaded_fangraphs_filename = 'fangraphs-leaderboard-projections.csv'
         self.destination_path = r"C:\Users\pddnh\Documents\GitHub\xdl\data"
+        self.cbs_ros_proj_url_h = 'https://xdl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:MI:CI:OF:DH/restofseason:p/standard/projections?print_rows=9999'
+        self.cbs_ros_proj_url_p = 'https://xdl.baseball.cbssports.com/stats/stats-main/all:SP:RP:P/restofseason:p/standard/projections?print_rows=9999'
         
     def cbs_login(self):
         service = Service(executable_path=self.chromedriver_path)
@@ -98,6 +101,84 @@ class Scraper():
         driver.quit()
         return df
     
+
+    def get_cbs_projections(self, stats_type):
+        try:
+            driver = self.cbs_login()
+        except:
+            print('Error logging in to CBS')
+            return
+        
+        time.sleep(30)
+        driver.implicitly_wait(60)
+
+        print('Waiting for projections page to load...')
+        if stats_type == 'h':
+            print(f"Stats type: {stats_type}")
+            print(f"Accessing URL: {self.cbs_ros_proj_url_h}")
+            driver.get(self.cbs_ros_proj_url_h)
+        elif stats_type == 'p':
+            print(f"Stats type: {stats_type}")
+            print(f"Accessing URL: {self.cbs_ros_proj_url_p}")
+            driver.get(self.cbs_ros_proj_url_p)
+        else:
+            print(f"Invalid stats type: {stats_type}")
+            driver.quit()
+            return
+        
+        time.sleep(3)
+        try:
+            # Wait until the number of <td> elements is 2,500
+            WebDriverWait(driver, 60).until(lambda d: len(d.find_elements(By.TAG_NAME, 'td')) >= 2500)
+            print('Page loaded at least 2500 rows')
+        except TimeoutException:
+            print("Timed out waiting for page to load")
+            driver.quit()
+            return
+        
+        # Get the HTML of the page
+        html = driver.page_source
+        soup = bs4(html, 'html.parser')
+        # Find the specific table you want
+        table = soup.find('table', {'class': 'data'})
+        # Use pandas to read the HTML table skipping 4 rows to get to actual table
+        df = pd.read_html(str(table), header=1, skiprows=1, extract_links='body')[0]
+        # Remove last row and first 2 columns
+        df = df.iloc[:-1, 2:]
+        # Apply a lambda function to each column to extract the first element of each tuple
+        df = df.apply(lambda col: [v[0] if v[1] is None else v for v in col])
+        # Define the regex pattern
+        pattern = r'^(?P<FullName>[A-Za-z\.\'\-\s]+) (?P<Positions>[A-Z0-9,]+) • (?P<Team>[A-Z]+)$'
+        # Extract the player name and ID
+        df['player'] = df['Player'].apply(lambda x: x[0])
+        df['id'] = df['player'].apply(lambda x: x[1])
+        # Parse id for cbsid
+        df['cbsid'] = df['id'].apply(lambda x: int(x.replace('/players/playerpage/', '')))
+        # Use regex to parse out CBSNAME, Pos, and Team
+        df[['CBSNAME', 'Positions', 'Team']] = df['player'].str.extract(pattern)
+        # Save to csv
+        if stats_type=='h':
+            # Be sure to convert all columns to appropriate data types
+            for col in ['AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'Rank']:
+                df[col] = df[col].astype(int)
+            for col in ['AVG', 'OBP', 'SLG']:
+                df[col] = df[col].astype(float)
+            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
+            df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-projections-{stats_type}.csv', index=False)
+            print(f'{datetime.now().year}-cbs-projections-{stats_type}.csv saved in {self.destination_path}')
+        if stats_type=='p':
+            # Be sure to convert all columns to appropriate data types
+            for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
+                df[col] = df[col].astype(int)
+            for col in ['ERA', 'WHIP']:
+                df[col] = df[col].astype(float)
+            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'HR', 'Rank']]
+            # Save to csv if projected IP > 0
+            df[df['INNs']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-projections-{stats_type}.csv', index=False)
+            print(f'{datetime.now().year}-cbs-projections-{stats_type}.csv saved in {self.destination_path}')
+
+        driver.quit()
+        return df
 
     def get_fangraphs_projections(self, system_name, stats_type, statgroup='fantasy', fantasypreset='roto5x5'):
         # Launch the scraper

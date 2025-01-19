@@ -56,14 +56,14 @@ drafted_by_pos = {
 
 
 class Bid(BaseModel):
-    playerid: str
+    cbsid: int
     owner: str
     price: Optional[list] = 0
     supp: Optional[int] = 0
 
 
 players = Table('players'+str(datetime.now().year), meta,
-                Column('playerid', String, primary_key=True),
+                Column('cbsid', Integer, primary_key=True),
                 Column('Paid', Integer),
                 Column('Supp', Integer),
                 Column('Owner', String(25)),
@@ -86,19 +86,19 @@ def scale_data(df, cols):
     return scaled_df
 
 def add_distance_metrics(h, player_id, col_list):
-    scaled_df = scale_data(h[h['Owner'].isna()].set_index('playerid'), col_list)
-    df2 = h[h['Owner'].isna()].loc[:,['playerid', 'Name', 'Pos']+col_list].set_index('playerid')
+    scaled_df = scale_data(h[h['Owner'].isna()].set_index('cbsid'), col_list)
+    df2 = h[h['Owner'].isna()].loc[:,['cbsid', 'Name', 'Pos']+col_list].set_index('cbsid')
     for j, row in scaled_df.iterrows():
         #df2.at[j,'corr'] = pearsonr(scaled_df.loc[player_id,col_list],row[col_list])[0]
         df2.at[j,'eucl_dist'] = np.linalg.norm(scaled_df.loc[player_id,col_list] - row[col_list])
         #df2.at[j,'manh_dist']= sum(abs(e - s) for s, e in zip(scaled_df.loc[player_id,col_list], row[col_list]))
     return df2.sort_values('eucl_dist').iloc[1:11]
 
-def next_closest_in_tier(df, pos, playerid):
+def next_closest_in_tier(df, pos, cbsid):
     try:
-        i = df[(df['Primary_Pos']==pos) & (df['playerid']==playerid) & (df['Owner'].isna())].index[0]
-        val = df[(df['Primary_Pos']==pos) & (df['Owner'].isna()) & (df['playerid']==playerid)]['Value'].iloc[0]
-        return round(df[df['playerid']==playerid]['Value'].iloc[0] - df[(df['Primary_Pos']==pos) & (df['Owner'].isna()) & (df['Value']<=val)].iloc[1]['Value'],1)
+        i = df[(df['Primary_Pos']==pos) & (df['cbsid']==cbsid) & (df['Owner'].isna())].index[0]
+        val = df[(df['Primary_Pos']==pos) & (df['Owner'].isna()) & (df['cbsid']==cbsid)]['Value'].iloc[0]
+        return round(df[df['cbsid']==cbsid]['Value'].iloc[0] - df[(df['Primary_Pos']==pos) & (df['Owner'].isna()) & (df['Value']<=val)].iloc[1]['Value'],1)
     except:
         return 0
 
@@ -123,7 +123,7 @@ async def slash_route():
 async def draft_view(request: Request):
     h = pd.read_sql('players'+str(datetime.now().year), engine)
     h.loc[h['Primary_Pos'].isin(['C', '1B', '2B', '3B', 'OF', 'DH', 'SS']), 'PosClass'] = 'h'
-    h['PosClass'].fillna('p', inplace=True)
+    h.fillna({'PosClass':'p'}, inplace=True)
     h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/n_teams
     
     avg_stats = {}
@@ -131,7 +131,7 @@ async def draft_view(request: Request):
         avg_stats[b['index']] = round(b['mean'],1)
     avg_stats['BA'] = round(avg_stats['H']/avg_stats['AB'],3)
 
-    h['Paid'].fillna(0,inplace=True)
+    h.fillna({'Paid':0},inplace=True)
     h['Paid'] = h['Paid'].apply(lambda x: int(x) if x>0 else x)
     for i in ['z', 'Dollars', 'Value', 'Value_ly', 'IP', 'K/9']:
         if i in h.columns:
@@ -142,11 +142,11 @@ async def draft_view(request: Request):
     for i in ['ERA', 'WHIP', 'Barrel%', 'O-Swing%', 'HardHit%']:
         if i in h.columns:
             h[i] = round(h[i],2)
-    for i in ['SO', 'W', 'Sv+Hld', 'R', 'RBI', 'SB', 'HR']:
+    for i in ['SO', 'W', 'SvHld', 'R', 'RBI', 'SB', 'HR']:
         if i in h.columns:
-            h[i].fillna(0,inplace=True)
+            h.fillna({i:0},inplace=True)
             h[i] = h[i].astype(int)
-    owners_df = h.query('Paid>0').groupby('Owner').agg({'Name':'count', 'Paid':'sum', 'z':'sum', 'H':'sum', 'AB':'sum', 'HR':'sum', 'R':'sum', 'RBI':'sum', 'SB':'sum', 'Outs':'sum', 'W':'sum', 'SO':'sum', 'Sv+Hld':'sum', 'ER':'sum', 'IP':'sum', 'BB':'sum', 'HA':'sum'}).reset_index()
+    owners_df = h.query('Paid>0').groupby('Owner').agg({'Name':'count', 'Paid':'sum', 'z':'sum', 'H':'sum', 'AB':'sum', 'HR':'sum', 'R':'sum', 'RBI':'sum', 'SB':'sum', 'Outs':'sum', 'W':'sum', 'SO':'sum', 'SvHld':'sum', 'ER':'sum', 'IP':'sum', 'BB':'sum', 'HA':'sum'}).reset_index()
     owners_df.rename(columns={'Name':'Drafted'},inplace=True)
     owners_df['Paid'] = owners_df['Paid'].apply(lambda x: int(x) if x>0 else x)
     owners_df['$/unit'] = round(owners_df['Paid']/owners_df['z'],1)
@@ -159,7 +159,7 @@ async def draft_view(request: Request):
     owners_df['ERA'] = round(owners_df['ER']/(owners_df['Outs']/3)*9,2)
     owners_df['WHIP'] = round((owners_df['BB']+owners_df['HA'])/(owners_df['Outs']/3),2)
     owners_df['Pts'] = 0
-    for i in ['BA', 'HR', 'R', 'RBI', 'SB', 'ERA', 'WHIP', 'W', 'SO', 'Sv+Hld']:
+    for i in ['BA', 'HR', 'R', 'RBI', 'SB', 'ERA', 'WHIP', 'W', 'SO', 'SvHld']:
         owners_df['Pts'] += owners_df[i].rank()
     owners_df['Rank'] = owners_df['Pts'].rank()
     roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'], data=np.zeros((33,n_teams)), columns=owner_list)
@@ -202,35 +202,37 @@ async def draft_view(request: Request):
                                     'init_dollars_per_z':round((tot_dollars/h[h['z']>=0]['z'].sum()*player_split),2),
                                     'current_dollars_per_z':round(owners_df.Paid.sum() / owners_df.z.sum(),2),
                                     'paid_histogram_data':h[h['Owner']=='Lima Time'].groupby('hist')['Paid'].count().reindex(pd.Series(['1-4', '5-9', '10-14', '15-19', '20-24', '25-29', '30-34', '35-39', '40+'])).fillna(0).to_json(orient='index'),
-                                    'team_z':h.groupby('Owner')[['zHR', 'zSB', 'zR', 'zRBI', 'zBA', 'zW', 'zSO', 'zSv+Hld', 'zERA', 'zWHIP']].sum().reset_index().round(2),
+                                    'team_z':h.groupby('Owner')[['zHR', 'zSB', 'zR', 'zRBI', 'zBA', 'zW', 'zSO', 'zSvHld', 'zERA', 'zWHIP']].sum().reset_index().round(2),
                                     })
 
 @app.get("/draft/update_bid")
-async def update_db(playerid=int, owner=str, price=int, supp=int):
+async def update_db(cbsid=int, owner=str, price=int, supp=int):
     conn = engine.connect()
     meta.create_all(engine)
-    conn.execute(players.update().values(Paid=price, Supp=supp, Owner=owner, Timestamp=datetime.now()).where(players.c.playerid==playerid))
+    conn.execute(players.update().values(Paid=price, Supp=supp, Owner=owner, Timestamp=datetime.now()).where(players.c.cbsid==cbsid))
+    conn.commit()
     conn.close()
-    return RedirectResponse('/draft') #{'playerid':playerid, 'price':price, 'owner':owner}
+    return RedirectResponse('/draft') #{'cbsid':cbsid, 'price':price, 'owner':owner}
 
-@app.get("/draft/sims/{playerid}")
-async def sim_players(playerid: str):
+@app.get("/draft/sims/{cbsid}")
+async def sim_players(cbsid: str):
     h = pd.read_sql('players'+str(datetime.now().year), engine)
     
-    if h[h['playerid']==playerid]['Primary_Pos'].iloc[0] in ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']:
-        sims = add_distance_metrics(h, playerid, ['BA', 'R', 'RBI', 'HR', 'SB']).sort_values('eucl_dist')
+    if h[h['cbsid']==cbsid]['Primary_Pos'].iloc[0] in ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']:
+        sims = add_distance_metrics(h, cbsid, ['BA', 'R', 'RBI', 'HR', 'SB']).sort_values('eucl_dist')
     else:
-        sims = add_distance_metrics(h, playerid, ['ERA', 'WHIP', 'W', 'SO', 'Sv+Hld']).sort_values('eucl_dist')
+        sims = add_distance_metrics(h, cbsid, ['ERA', 'WHIP', 'W', 'SO', 'SvHld']).sort_values('eucl_dist')
     print(sims)
-    sims_data = h[h['playerid'].isin(sims['Name'].index)][['Name', 'Value']]
+    sims_data = h[h['cbsid'].isin(sims['Name'].index)][['Name', 'Value']]
     #print('<br>'.join(sims_data))
     return sims_data.to_json(orient='records')#'<br>'.join(sims_data['Name'])
 
 @app.get('/draft/reset_all')
 async def reset_all():
-    t = text(f"UPDATE players{str(datetime.now().year)} SET Paid=NULL, Owner=NULL WHERE Keeper=0")
+    t = text(f"UPDATE players{str(datetime.now().year)} SET Paid=NULL, Supp=NULL, Owner=NULL WHERE Keeper=0")
     conn = engine.connect()
     conn.execute(t)
+    conn.commit()
     return RedirectResponse('/draft')
 
 
@@ -260,14 +262,14 @@ async def optimize(tm: str):
     df.loc[df['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
     df.loc[(~df['Player'].isin(opt['hitter_lineup'])) & (df['type']=='h'), 'opt_designation'] = 'bench_hitter'
     df.loc[(~df['Player'].isin(opt['pitcher_lineup'])) & (df['type']=='p'), 'opt_designation'] = 'bench_pitcher'
-    opt_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']].sum()
+    opt_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']].sum()
     opt_totals['z'] = round(opt_totals['z'],1)
     opt_totals['hitter_z'] = round(df[df['Player'].isin(opt['hitter_lineup'])]['z'].sum(),1)
     opt_totals['BA'] = round(opt_totals['H']/opt_totals['AB'],3)
     opt_totals['ERA'] = round(opt_totals['ER']/opt_totals['IP']*9,2)
     opt_totals['WHIP'] = round((opt_totals['BBa']+opt_totals['Ha'])/opt_totals['IP'],2)
     opt_totals.to_dict()
-    bench_totals = df[~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
+    bench_totals = df[~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
     bench_totals['z'] = round(bench_totals['z'],1)
     opt_totals['pitcher_z'] = round(df[df['Player'].isin(opt['pitcher_lineup'])]['z'].sum(),1)
     bench_totals['BA'] = round(bench_totals['H']/bench_totals['AB'],3)
@@ -308,7 +310,7 @@ async def trade_analyzer(request: Request):
     df.loc[df['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
     df.loc[(~df['Player'].isin(opt['hitter_lineup'])) & (df['type']=='h'), 'opt_designation'] = 'bench_hitter'
     df.loc[(~df['Player'].isin(opt['pitcher_lineup'])) & (df['type']=='p'), 'opt_designation'] = 'bench_pitcher'
-    ros_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
+    ros_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
     return templates.TemplateResponse('trade.html', {'request':request, 'data':df.to_dict(orient='records'),
                     'teams':teams, 'lima':opt, 'opt_pos':opt_pos, 'ros_totals': ros_totals,
                     'lg':lg.to_dict(orient='records'),
