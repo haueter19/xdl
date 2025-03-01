@@ -33,7 +33,7 @@ class Scraper():
         login_form.send_keys('gostros09')
         login_form = driver.find_element(By.NAME, 'password')
         login_form.send_keys('Segneri9A')
-        time.sleep(4)
+        time.sleep(7)
         # Wait until the "Continue" button is present and clickable
         continue_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Continue')]"))

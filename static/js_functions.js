@@ -63,7 +63,7 @@ $.fn.z_players = function(){
             
         }
     ]
-    layout = {title: "Z List", height: 400, width: 1350, margin: {l:15, t:30}},
+    layout = {title: "Z List", height: 500, width: 1350, margin: {l:15, t:30}},
     Plotly.newPlot("z_players_chart", z_scatter_data, layout, {displayModeBar: false})
 }
 
@@ -106,7 +106,18 @@ $.fn.tiers = function(){
             
         }
     ]
-    layout = {title: "Positional Tiers", hovermode:'closest', height: 400, width: 1050, margin: {l:20, t:30}},
+    layout = {title: "Positional Tiers", hovermode:'closest', height: 500, width: 1300, margin: {l:20, t:30},
+    shapes: [
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 35.7, y1: 35.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 27.6, y1: 27.6, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 24.54, y1: 24.54, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 19.75, y1: 19.75, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 16.7, y1: 16.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            //{type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 15.03, y1: 15.03, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            //{type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 13.5, y1: 13.5, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            //{type: 'line', x0: -0.25, x1: 0.25, y0: 12.28, y1: 12.28, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+        ],
+    },
     Plotly.newPlot("tiers_chart", tiers_data, layout, {displayModeBar: false})
 }
 
@@ -163,20 +174,20 @@ $.fn.update_player_stats_window = function(selected_index){
     +'</tr></table><br>'
     
     if ((data[selected_index]['Primary_Pos']=='SP') || (data[selected_index]['Primary_Pos']=='RP')){
-        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>W</th><th>S+H</th><th>FIP</th><th>HR/9</th><th>K/9</th><th>BB/9</th><th>K%</th><th>BB%</th></thead></tr>'
+        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>S+H</th><th>FIP</th><th>HR/9</th><th>K/9</th><th>BB/9</th><th>K%</th><th>BB%</th></thead></tr>'
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['IP']+'</td>'
         +'<td>'+data[selected_index]['ERA']+'</td>'
         +'<td>'+data[selected_index]['WHIP']+'</td>'
         +'<td>'+data[selected_index]['SO']+'</td>'
-        +'<td>'+data[selected_index]['W']+'</td>'
+        +'<td>'+data[selected_index]['QS']+'</td>'
         +'<td>'+data[selected_index]['SvHld']+'</td>'
-        +'</tr><tr><td>2023</td>'
+        +'</tr><tr><td>2024</td>'
         +'<td>'+data[selected_index]['IP_ly']+'</td>'
         +'<td>'+data[selected_index]['ERA_ly']+'</td>'
         +'<td>'+data[selected_index]['WHIP_ly']+'</td>'
         +'<td>'+data[selected_index]['SO_ly']+'</td>'
-        +'<td>'+data[selected_index]['W_ly']+'</td>'
+        +'<td>'+data[selected_index]['QS_ly']+'</td>'
         +'<td>'+data[selected_index]['SvHld_ly']+'</td>'
         +'<td>'+data[selected_index]['FIP']+'</td>'
         +'<td>'+data[selected_index]['HR/9']+'</td>'
@@ -195,7 +206,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SB']+'</td>'
         +'<td>'+data[selected_index]['R']+'</td>'
         +'<td>'+data[selected_index]['RBI']+'</td>'
-        +'</tr><tr><td>2022</td>'
+        +'</tr><tr><td>2024</td>'
         +'<td>'+data[selected_index]['PA_ly']+'</td>'
         +'<td>'+data[selected_index]['xwOBA']+'</td>'
         +'<td>'+data[selected_index]['xBA']+'</td>'
@@ -236,8 +247,8 @@ $.fn.create_radar_chart = function(selected){
     if ((position == 'SP') | (position =='RP')){
         radar_data = [{
             type: 'scatterpolar',
-            r: [data[selected_index]['zERA'], data[selected_index]['zWHIP'], data[selected_index]['zW'], data[selected_index]['zSO'], data[selected_index]['zSvHld'], data[selected_index]['zERA']],
-            theta: ['ERA','WHIP','W', 'SO', 'SvHld', 'ERA'],
+            r: [data[selected_index]['zERA'], data[selected_index]['zWHIP'], data[selected_index]['zQS'], data[selected_index]['zSO'], data[selected_index]['zSvHld'], data[selected_index]['zERA']],
+            theta: ['ERA','WHIP','QS', 'SO', 'SvHld', 'ERA'],
             fill: 'toself'
             }]
     } else {
@@ -272,17 +283,20 @@ function bid_amounts(id){
 }
 
 $(document).ready(function(){
+    if (redirectStatus =='unrosterable'){
+        alert('Unable to roster last drafted player')
+    }
     var el = $("#team_input")
     t = `<div class="row">`
     c = 1;
     for (let tm of owner_list){
     if (c==3 | c==6 | c==9 | c==12){
         t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
-            <label for="team${c}">${tm}</label></div></div><div class="row">`
+            <label for="team${c}">${tm.slice(0,11)}</label></div></div><div class="row">`
         c+=1;
     } else {
         t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
-            <label for="team${c}">${tm}</label></div>`
+            <label for="team${c}">${tm.slice(0,11)}</label></div>`
         c += 1;
     }
     }
@@ -297,10 +311,12 @@ $(document).ready(function(){
     $.fn.owners_chart('Owner', '$ Left');
     $.fn.tiers();
     $.fn.paid_histogram();
+    
     $("input[name='cbsid']").on('focusout', function(e){
         var selected = $(this).val();
         $(this).create_radar_chart(selected);
         bid_amounts(selected);
+        
         $.get("/draft/sims/"+selected, function(resp, status){
             //alert("Data: " + resp + "\nStatus: " + status);
             resp = JSON.parse(resp);
@@ -312,7 +328,39 @@ $(document).ready(function(){
             })
             $("#sims").html('<font size="2">'+values+'</font>');
         });
+        
+        // new and experimental
+        console.log(selected)
+        pdata = 0
+        $.each(data, function(k,v){
+            if (v['cbsid']==selected){
+                pdata = k
+            }
+        })
+        //console.log(data[pdata]['Name'])
+        //console.log('owners:',owners)
+        jsonData = {'owners':owners, 'player_data':data[pdata], 'roster':roster}
+
+        $.ajax({
+            url: '/draft/get_bids',
+            type: 'POST',
+            data: JSON.stringify(jsonData),
+            contentType: 'application/json',
+            success: function(response) {
+                console.log(`server response: ${response}`);
+                var maxIndex = response.indexOf(Math.max(...response));
+                //console.log('maxIndex:',maxIndex)
+                //console.log('winning bid amount:',response[maxIndex])
+                //console.log('owners:',owners)
+                //console.log(owner_list[maxIndex])
+                //console.log(owners[maxIndex]['Owner'], response[maxIndex])
+                $("#bidWinner").text(owner_list[maxIndex]+' '+response[maxIndex])
+            }
+        });
+        // end new
+
     });
+
     $("#bid_form").submit(function(){
         $("#error_msg").hide();
         var player_id = $("input[name='cbsid']").val();
@@ -347,6 +395,16 @@ $(document).ready(function(){
         }
     })
     
+    $("#acceptAuctionBid").click(function(){
+        var cbsid = $("#player_select").val();
+        bidWinnerText = $("#bidWinner").text();
+        arr = bidWinnerText.split(' ')
+        price = arr.slice(-1)
+        team = arr.slice(0,-1).join(' ')
+        url = `/draft/update_bid?cbsid=${cbsid}&owner=${team}&price=${price}&supp=0`;
+        window.location = url
+    })
+
     $("#button").click(function(){
         var v = $("#player_list").val();
         $.get("/draft/"+v, function(data, status){

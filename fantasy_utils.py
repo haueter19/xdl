@@ -1,8 +1,11 @@
+import numpy as np
 import pandas as pd
 import math
 from datetime import datetime
 import re
+import requests
 from sqlalchemy import create_engine
+
 
 tm_players, tm_dollars = 23, 260
 
@@ -92,7 +95,7 @@ class Fantasy_Projections():
         quals_h = previous_season_stats_hitter[['H', 'AB', 'PA', 'zlgBA', 'R', 'RBI', 'HR', 'SB']].describe().to_dict()
         
         if isinstance(previous_season_stats_pitcher,pd.DataFrame):
-            for stat in ['BB', 'HA', 'ER', 'IP', 'SO', 'W', 'SvHld']:
+            for stat in ['BB', 'HA', 'ER', 'IP', 'SO', 'QS', 'SvHld']:
                 assert stat in previous_season_stats_pitcher.columns
         else:
             previous_season_stats_pitcher = pd.read_csv('data/'+str(yr-1)+'-final-stats-p.csv', encoding='latin1')
@@ -114,7 +117,7 @@ class Fantasy_Projections():
         lgWHIP = (previous_season_stats_pitcher['BB'].sum()+previous_season_stats_pitcher['HA'].sum())/previous_season_stats_pitcher['IP'].sum()
         previous_season_stats_pitcher['zlgERA'] = previous_season_stats_pitcher.apply(lambda x: ((x['ER']*9) - (x['IP']*lgERA))*-1, axis=1)
         previous_season_stats_pitcher['zlgWHIP'] = previous_season_stats_pitcher.apply(lambda x: ((x['HA']+x['BB'])-(x['IP']*lgWHIP))*-1, axis=1)
-        quals_p = previous_season_stats_pitcher[['BB', 'HA', 'ER', 'IP', 'SO', 'W', 'SvHld', 'zlgERA', 'zlgWHIP']].describe().to_dict()
+        quals_p = previous_season_stats_pitcher[['BB', 'HA', 'ER', 'IP', 'SO', 'QS', 'SvHld', 'zlgERA', 'zlgWHIP']].describe().to_dict()
         #quals_p['HA'] = quals_p.pop('H')
         quals_h.update(quals_p)
         self.quals = quals_h
@@ -168,10 +171,10 @@ class Fantasy_Projections():
             df['z_h_ly'] = df['zR_ly']+df['zRBI_ly']+df['zHR_ly']+df['zSB_ly']+df['zBA_ly']
             return df
         else:
-            for stat in ['ERA', 'WHIP', 'SO', 'W', 'SvHld', 'ERA_ly', 'WHIP_ly', 'SO_ly', 'W_ly', 'SvHld_ly']:
+            for stat in ['ERA', 'WHIP', 'SO', 'QS', 'SvHld', 'ERA_ly', 'WHIP_ly', 'SO_ly', 'QS_ly', 'SvHld_ly']:
                 df['z'+stat] = df.apply(lambda row: self.big_board(row, stat, self.quals), axis=1)
-            df['BIGAAp'] = df['zERA']+df['zWHIP']+df['zW']+df['zSO']+df['zSvHld']
-            df['z_p_ly'] = df['zERA_ly']+df['zWHIP_ly']+df['zW_ly']+df['zSO_ly']+df['zSvHld_ly']
+            df['BIGAAp'] = df['zERA']+df['zWHIP']+df['zQS']+df['zSO']+df['zSvHld']
+            df['z_p_ly'] = df['zERA_ly']+df['zWHIP_ly']+df['zQS_ly']+df['zSO_ly']+df['zSvHld_ly']
             return df
     
 
@@ -288,10 +291,10 @@ class Fantasy_Projections():
 
         p = p[(p['IP']>1)]
 
-        proj = pd.pivot_table(p, index='cbsid', values=['GS', 'G', 'IP', 'ER', 'HA', 'SO', 'BB', 'W', 'SV', 'HLD', 'SvHld'], aggfunc='mean')\
+        proj = pd.pivot_table(p, index='cbsid', values=['GS', 'G', 'IP', 'ER', 'HA', 'SO', 'BB', 'QS', 'SV', 'HLD', 'SvHld'], aggfunc='mean')\
             .merge(p[['cbsid', 'playerid', 'Name', 'Team']], on='cbsid', how='inner').drop_duplicates('cbsid') # drop by cbsid b/c when this is the same, the data avgs for the entries are the same
-        proj['sorter'] = proj['SO']+(proj['SvHld']*4)+proj['W']
-        for i in ['IP', 'GS', 'G', 'HA', 'SO', 'ER', 'BB', 'W', 'SV', 'HLD', 'SvHld']:
+        proj['sorter'] = proj['SO']+(proj['SvHld']*4)+proj['QS']
+        for i in ['IP', 'GS', 'G', 'HA', 'SO', 'ER', 'BB', 'QS', 'SV', 'HLD', 'SvHld']:
             proj.fillna({i:0},inplace=True)
             proj[i] = proj[i].apply(lambda x: int(x))
         proj['ERA'] = proj['ER']/proj['IP']*9
@@ -313,10 +316,10 @@ class Fantasy_Projections():
         proj['Primary_Pos'] = proj['Pos'].apply(lambda x: 'SP' if 'SP' in x else 'RP')
 
         lyp = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-p.csv', encoding='latin1')
-        lyp.rename(columns={'INNs':'IP_ly', 'W':'W_ly', 'ER':'ER_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'HA':'HA_ly', 'BB':'BB_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
+        lyp.rename(columns={'INNs':'IP_ly', 'QS':'QS_ly', 'ER':'ER_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'HA':'HA_ly', 'BB':'BB_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
         lyp['SvHld_ly'] = lyp['SV_ly']+lyp['HLD_ly']
 
-        proj = proj.merge(lyp[['cbsid', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'ERA_ly', 'WHIP_ly', 'SvHld_ly', 'W_ly', 'SO_ly']], on='cbsid',how='left')
+        proj = proj.merge(lyp[['cbsid', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'ERA_ly', 'WHIP_ly', 'SvHld_ly', 'QS_ly', 'SO_ly']], on='cbsid',how='left')
 
         self.pitching_data = proj.sort_values('sorter', ascending=False)
         return proj
@@ -436,11 +439,161 @@ class Fantasy_Projections():
 
 
 
+# Dynamic max_bid dictionary
+max_bid_mult = {a:b for a, b in zip(list(range(1,46)), [3,2.5,2.2,1.9,1.8,1.7,1.6,1.55,1.5,1.4,1.36,1.35,1.34,1.33,1.32,1.31,1.3,1.29,1.28,1.27,1.26,1.25,1.24,1.23,1.22,1.21,1.2,1.19,1.18,1.17,1.16,1.15,1.14,1.13,1.12,1.11,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1])}
+
+#owner_sort = [i[1] for i in enumerate(owners.keys())]
+
+pos_elig = {
+    'C':['C', 'DH1', 'DH2'],
+    '1B':['1B', 'CI', 'DH1', 'DH2'],
+    '2B':['2B', 'MI', 'DH1', 'DH2'],
+    '3B':['3B', 'CI', 'DH1', 'DH2'],
+    'SS':['SS', 'MI', 'DH1', 'DH2'],
+    'OF':['OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2'],
+    'SP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
+    'RP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
+    'P':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']
+}
+
+def calculate_max_bid(player_value):
+    """
+    Dynamically calculate the max bid factor based on the player's value.
+    """
+    if player_value > 45:
+        return 1.1 * player_value
+    else:
+        return max_bid_mult.get(player_value) * player_value
+    
+
+
+def simulate_auction(player_data, owners_dict, rosters, timidness=0.1):
+    """
+    Simulate an auction draft where teams bid on a player.
+    
+    Parameters:
+    - player_value: Estimated value of the player.
+    - owners: dict of owners
+    - team_budgets: List of budgets for each team.
+    - max_bid_factor: Maximum bid as a multiple of the player's value.
+    - timidness: Higher values make teams more timid about bidding as bids increase.
+    
+    Returns:
+    - A list of bids (0 means no bid) for each team.
+    """
+    player_value = int(max(player_data['CBS'], player_data['Dollars']))
+    pos_elig = {
+        'C':['C', 'DH1', 'DH2'],
+        '1B':['1B', 'CI', 'DH1', 'DH2'],
+        '2B':['2B', 'MI', 'DH1', 'DH2'],
+        '3B':['3B', 'CI', 'DH1', 'DH2'],
+        'SS':['SS', 'MI', 'DH1', 'DH2'],
+        'OF':['OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2'],
+        'DH':['DH1', 'DH2'],
+        'SP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
+        'RP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
+        'P':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']
+    }
+    elig_list = []
+    for pos in player_data['Pos'].split(','):
+        elig_list.extend(pos_elig[pos])
+    elig_list = list(set(elig_list))
+    max_bid = calculate_max_bid(player_value)
+    bids = []
+
+    for k,v in owners_dict.items():
+        # Checks to see if the team has one of the player's positions available
+        if rosters.map(lambda x: 0 if isinstance(x, str) and any(char.isalpha() for char in x) else 1).loc[elig_list, k].sum() <= 0:
+            print(f"{k} ineligible to bid on player")
+            bids.append(0)
+        else:
+            # Set budget and team's max bid as constraints
+            budget = v['$ Left']
+            team_max_bid = 260 if pd.isnull(v['max_bid']) else v['max_bid']
+            print(k, budget, team_max_bid)
+
+            # Probability of bidding decreases as the bid approaches max_bid
+            bid_probability = max(0.1, 1 - timidness * (max_bid / player_value - 1))
+            if np.random.random() > bid_probability or budget < player_value * 0.5:
+                # Skip bidding due to budget or preference
+                bids.append(0)
+            else:
+                # Generate a bid with some randomness
+                # Do not allow a bid higher than team's max bid
+                bid = np.random.uniform(player_value * 0.8, min(team_max_bid, max_bid))
+                bids.append(min(bid, budget))  # Respect team budgets
+    
+    # Round bids to integers for realism
+    return [int(bid) for bid in bids]
+
+
+
+def find_bid_winner(bids, offer):
+    orig_order = [i[1] for i in enumerate(owners.keys())] #list(owners.keys())
+    owners_key = {tm:i for i, tm in enumerate(orig_order)}
+    bid_order = orig_order[orig_order.index(offer):]+orig_order[:orig_order.index(offer)] #bid_order[offer:]+bid_order[:offer]
+    bids = bids[owners_key[offer]:] + bids[:owners_key[offer]]
+    current_bid = 0
+    bid_complete = 0
+    max_bid_round = max(bids)
+    
+    while current_bid < 60:
+        if current_bid == max_bid_round:
+            break
+        if bid_complete == 1:
+            break
+        for n, owner in enumerate(bid_order):
+            if len([i for i, val in enumerate(bids) if val >= current_bid]) < 2:
+                #print(f'Bidding is complete. {bid_winner} wins with bid of {current_bid}')
+                bid_complete = 1
+                break
+            elif current_bid >= bids[n]:
+                #print(f"current bid is {current_bid}. {owner}'s top bid of {bids[n]} has been met, therefore this owner is done, current bid remains the same")
+                pass
+            else:
+                bid_winner = owner
+                current_bid += 1
+                #print(f"current bid is {current_bid-1}, {len([i for i, val in enumerate(bids) if val >= current_bid])} -- {owner} max bid is {bids[n]} therefore {owner} raises bid to {current_bid}")
+    return bid_winner, current_bid
+
+
+
+def complete_bid(player_data):    
+    player_value = max(player_data['CBS'], player_data['Dollars'])
+    timidness = 0.3  # Adjust timidness to control bidding behavior
+    
+    bids = simulate_auction(player_data, owners_df.to_dict(orient='index'), rosters, timidness=timidness)
+    
+    print("Generated Bids:", bids)
+    #plot_auction_bids(bids, player_value)
+    
+    winning_owner, winning_bid = find_bid_winner(bids, offer)
+    offer = winning_owner
+    print(winning_owner, winning_bid)
+    
+    # Update database
+    url = 'http://localhost:8000/draft/update_bid'
+    params = {'cbsid': cbsid, 'price': winning_bid, 'owner': winning_owner}
+    r = requests.get(url, params)
+    
+    if r.status_code == 200:
+        h = pd.read_sql(f"SELECT * FROM players{datetime.now().year} WHERE cbsid IS NOT NULL", engine)
+        owners_df = pd.read_html(r.text)[2]
+        owners_df.fillna({'$ Left':260, 'Max Bid':237, 'Drafted':0},inplace=True)
+        owners_df = owners_df.set_index('Owner').reindex(owner_sort)
+        owners_df.fillna({'$ Left':260, 'Max Bid':237, 'Drafted':0, '$ Left/Plyr':11.3},inplace=True)
+        owners_df['$ Left'] = owners_df['$ Left'].astype(int)
+        rosters = pd.read_html(r.text)[3]
+        rosters = rosters.set_index('Pos')
+    return h, owners_df, rosters
+
+
+
 def owners(conv, n_teams=12, tm_players=23):
     tot_dollars = n_teams * 260
     tot_players = n_teams * tm_players
     df = pd.read_sql('players', engine)
-    owners_df = df.groupby('Owner').agg({'Name':'count', 'Paid':'sum', 'z':'sum', 'H':'sum', 'AB':'sum', 'HR':'sum', 'R':'sum', 'RBI':'sum', 'SB':'sum', 'W':'sum', 'Sv+Hld':'sum', 'SO':'sum'}).reset_index()
+    owners_df = df.groupby('Owner').agg({'Name':'count', 'Paid':'sum', 'z':'sum', 'H':'sum', 'AB':'sum', 'HR':'sum', 'R':'sum', 'RBI':'sum', 'SB':'sum', 'QS':'sum', 'Sv+Hld':'sum', 'SO':'sum'}).reset_index()
     owners_df.rename(columns={'Name':'Drafted'},inplace=True)
     owners_df['$/unit'] = owners_df['Paid']/owners_df['z']
     owners_df['$ Left'] = tm_dollars - owners_df['Paid']
@@ -449,10 +602,11 @@ def owners(conv, n_teams=12, tm_players=23):
     owners_df['Value'] = (owners_df['z']*conv)-owners_df['Paid']
     owners_df['BA'] = owners_df['H']/owners_df['AB']
     owners_df['Pts'] = 0
-    for i in ['BA', 'HR', 'R', 'RBI', 'SB', 'W', 'Sv+Hld', 'SO']:
+    for i in ['BA', 'HR', 'R', 'RBI', 'SB', 'QS', 'Sv+Hld', 'SO']:
         owners_df['Pts'] += owners_df[i].rank()
     owners_df['Rank'] = owners_df['Pts'].rank()
     return df.sort_values('z', ascending=False), owners_df
+
 
 
 def check_roster_pos(roster, name, team_name, pos, eligible):
@@ -489,6 +643,7 @@ def check_roster_pos(roster, name, team_name, pos, eligible):
     return pos_list
 
 
+
 def next_closest_in_tier(df, pos, playerid):
     try:
         i = df[(df['Primary_Pos']==pos) & (df['playerid']==playerid) & (df['Owner'].isna())].index[0]
@@ -496,6 +651,7 @@ def next_closest_in_tier(df, pos, playerid):
         return df[df['playerid']==playerid]['Value'].iloc[0] - df[(df['Primary_Pos']==pos) & (df['Owner'].isna()) & (df['Value']<=val)].iloc[1]['Value']
     except:
         return 0
+
 
 
 def create_statcast_csv(yr):
@@ -506,7 +662,7 @@ def create_statcast_csv(yr):
     scb.to_csv('data/'+str(yr)+'-statcast-h.csv')
     
     scp = pitching_stats(yr, qual=0)
-    scp.rename(columns={'IDfg':'playerid', 'IP':'IP_ly', 'W':'W_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
+    scp.rename(columns={'IDfg':'playerid', 'IP':'IP_ly', 'QS':'QS_ly', 'ERA':'ERA_ly', 'WHIP':'WHIP_ly', 'SV':'SV_ly', 'HLD':'HLD_ly', 'SO':'SO_ly'},inplace=True)
     scp['playerid'] = scp['playerid'].astype(str)
     scp['Sv+Hld_ly'] = scp['SV_ly']+scp['HLD_ly']
     scp.sort_values('IP_ly')
@@ -515,9 +671,12 @@ def create_statcast_csv(yr):
     return sc
 
 
+
 def show_all_tables():
     # First check available tables
     return pd.read_sql("SELECT name FROM sqlite_master", engine)
+
+
 
 def create_new_table(yr):
     # Create new table <name>
@@ -525,14 +684,20 @@ def create_new_table(yr):
     pd.read_sql("CREATE TABLE "+tbl_name+" AS SELECT * FROM players",engine)
     return f"tbl_name created"
 
+
+
 def drop_table(tbl_name):
     # Drop table if needed
     pd.read_sql('DROP TABLE '+tbl_name,engine)
     return f"tbl_name dropped"
 
+
+
 def check_old_table(tbl_name):
     # Check the old table with new name
     return pd.read_sql("SELECT * from "+tbl_name, engine)
+
+
 
 def fix_downloaded_cbs_values(year, save=False):
     # First get spreadsheet from CBS auction values page
@@ -545,4 +710,107 @@ def fix_downloaded_cbs_values(year, save=False):
     if save:
         cbs[['playerid', 'Name', 'Pos', 'Team', 'CBS']].to_csv('data/'+str(year)+'-cbs-values.csv',index=False)
     return cbs
+
+
+
+def sort_by_other_list(list_to_sort, order_list):
+    """Sorts a list based on the order of another list."""
+
+    order_dict = {value: index for index, value in enumerate(order_list)}
+    return sorted(list_to_sort, key=lambda x: order_dict.get(x, float('inf')))
+
+
+
+def get_eligible_positions(pos, pos_order):
+    # Expand player eligibility 
+    eligibility = []
+    for position in pos.split(','):
+        if position=='C':
+            eligibility.extend(['C', 'DH1', 'DH2'])
+        if position=='1B':
+            eligibility.extend(['1B', 'CI', 'DH1', 'DH2'])
+        if position=='2B':
+            eligibility.extend(['2B', 'MI', 'DH1', 'DH2'])
+        if position=='3B':
+            eligibility.extend(['3B', 'CI', 'DH1', 'DH2'])
+        if position=='SS':
+            eligibility.extend(['SS', 'MI', 'DH1', 'DH2'])
+        if position=='OF':
+            eligibility.extend(['OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2'])
+        if position=='DH':
+            eligibility.extend(['DH1', 'DH2'])
+        if position in ['SP', 'RP', 'P']:
+            eligibility.extend(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'])
+        if position in ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']:
+            eligibility.extend([position])
+    
+    # Remove duplicates and sort
+    eligibility = list(set(list(dict.fromkeys(eligibility))))
+    eligibility = sort_by_other_list(eligibility, pos_order)
+    return eligibility
+
+
+pos_order = ['C', 'MI', 'CI', 'DH1', 'DH2', '2B', '3B', 'SS', '1B', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
+
+
+def check_roster_pos(player, roster, df, pos_order):
+    """
+    Place a player on the roster by finding a valid permutation of positions
+    
+    Args:
+    roster: DataFrame with index of all possible positions
+    name: str, player name
+    team_name: str, name of team drafting player
+    eligible: str, comma-separated positions the player is eligible to play
+    pos_order: list of positions sorted by the order to try to place the player
+    
+    Returns:
+    str or None: Assigned position, or None if no placement possible
+    """
+    eligibility = get_eligible_positions(player['Pos'], pos_order)
+    
+    # Get current team roster
+    team_roster = roster[player['Owner']]
+    
+    # Find current players and their original positions
+    current_players = team_roster[team_roster != 0]
+    
+    # Get all current rostered positions
+    rostered_positions = current_players.index.tolist()
+    
+    # Combine current players with new player
+    #all_players = list(current_players.values) + [name]
+
+    # First check rostered_positions for a free spot
+    for position in eligibility:
+        if position not in rostered_positions:
+            #roster.loc[position, player['Owner']] = player['Name']
+            # End function looping b/c we found a place to put the player
+            return [{player['Name']:position}]
+
+    # Loop through the drafted player's eligible positions
+    bump = False
+    for p in eligibility:
+        # Find name of player currently in each roster spot
+        used_pos_player_name = roster.loc[p, player['Owner']]
+        # Find the other positions this player could potentially move to
+        used_pos_player_positions = get_eligible_positions(df[df['Name']==used_pos_player_name]['Pos'].iloc[0], pos_order)
+        print(f"{p} is currently used by {used_pos_player_name}. {used_pos_player_name} is also eligible at {used_pos_player_positions}")
+        # Loop through the already rostered player's eligible positions
+        for p2 in used_pos_player_positions:
+            # If the rostered player can move to an open position, put him there and put the newly drafted player in his spot
+            if p2 not in rostered_positions:
+                print(f"{used_pos_player_name} is eligible to move to {p2}. Moving {used_pos_player_name} to {p2}. Rostering {player['Name']} in {p}")
+                #roster.loc[p2, player['Owner']] = used_pos_player_name
+                #roster.loc[p, player['Owner']] = player['Name']
+                # Set bump to True
+                bump = True
+                # Get out of the loop now that we found someone who can move
+                return [{player['Name']:p}, {used_pos_player_name:p2}]
+        if bump == True:
+            break
+    
+    print(f'Unable to roster {player["Name"]}')
+    return [{player['Name']:None}]
+        
 
