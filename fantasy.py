@@ -119,8 +119,61 @@ def optimize_team(tm, df):
     return {'pitcher_z':x.pitcher_optimized_z, 'pitcher_lineup':x.pitcher_optimized_lineup, 'hitter_z':x.hitter_optimized_z, 'hitter_lineup':x.hitter_optimized_lineup}
 
 
-
 def build_roster(n_teams, owner_list, df, pos_order):
+    roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9',
+                             'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'], data=np.zeros((33,n_teams)), columns=owner_list)
+    
+    # Keep track of players we've already rostered
+    rostered_players = {team: set() for team in owner_list}
+    
+    # Process players in order of versatility (least versatile first)
+    for tm in owner_list:
+        # Get all players for this team
+        team_players = df[df['Owner']==tm][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].copy()
+        
+        # Sort bench players by supp value
+        bench_players = team_players[team_players['Paid']==0].sort_values("Supp").copy()
+        
+        # Handle bench players first
+        for i, row in bench_players.iterrows():
+            if row['Name'] not in rostered_players[tm]:
+                print(row['Name'], 'B'+str(int(row['Supp'])))
+                roster.loc['B'+str(int(row['Supp'])),tm] = row['Name']
+                rostered_players[tm].add(row['Name'])
+        
+        # Calculate versatility for each player
+        def get_versatility(pos):
+            return len(fu.get_eligible_positions(pos, pos_order))
+        
+        # Add versatility column
+        active_players = team_players[team_players['Paid']>0].copy()
+        active_players['versatility'] = active_players['Pos'].apply(get_versatility)
+        
+        # Sort by versatility (least versatile first) and then by timestamp
+        active_players = active_players.sort_values(["versatility", "Timestamp"])
+        
+        # Process active players
+        for i, row in active_players.iterrows():
+            # Skip if this player is already rostered
+            if row['Name'] in rostered_players[tm]:
+                print(f"Skipping {row['Name']} as they are already rostered")
+                continue
+                
+            player_dict = row[['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
+            results = fu.check_roster_pos(player_dict, roster, df, pos_order, is_draft_operation=False)
+            print(f"Results for {row['Name']}: {results}")
+            
+            # Process results to update roster
+            for result in results:
+                for player_name, position in result.items():
+                    if position is not None:
+                        roster.loc[position, tm] = player_name
+                        rostered_players[tm].add(player_name)
+    
+    return roster
+
+
+def WORKS_build_roster(n_teams, owner_list, df, pos_order):
     roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 
                              'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'], data=np.zeros((33,n_teams)), columns=owner_list)
     for tm in owner_list:
@@ -215,9 +268,11 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
     print(f"updated conv_factor: {conv_factor}")
     print(f"original conv_factor: {orig_conv}")
     #h['curValue'] = round(h['z']*conv_factor,1)
+    h = h.copy()
     h['curValue'] = round(h['Value']*(conv_factor/orig_conv),1)
+    h = h.copy()
     h['surplus'] = round(h['Value'] - h['CBS'],2)
-
+    
     return templates.TemplateResponse('draft.html', {'request':request, 'players':h.sort_values('z', ascending=False), 
                                     'status':status,
                                     'owned':h[h['Owner'].notna()], 'owners_df':owners_df.sort_values('Rank', ascending=False), 'roster':roster, 'roster_json':roster.to_dict(orient='records'),
@@ -236,32 +291,76 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
 
 @app.get("/draft/update_bid")
 async def update_db(cbsid=int, owner=str, price=int, supp=Optional[int] == 0):
-    #fu.check_roster_pos(row[cols].to_dict(), roster, df, pos_order)
+    print(f"Endpoint triggered for cbsid: {cbsid}, owner: {owner}")
     df = pd.read_sql(f"SELECT cbsid, Name, '{owner}' As Owner, Pos, COALESCE(Paid,{price},0) Paid, Supp, Team, Timestamp, Keeper, Value FROM players{datetime.now().year} WHERE Owner='{owner}' or cbsid={cbsid}", engine)
     df.loc[df['cbsid']==int(cbsid), ['Paid', 'Supp']] = [int(price), int(supp)]
-    
-    #print(df)
+   
     player = df[df['cbsid']==int(cbsid)].iloc[0][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
-    print(player)
     roster = build_roster(n_teams, owner_list, df, fu.pos_order)
-    results = fu.check_roster_pos(player, roster, df, fu.pos_order)
-    for result in results:
-        print(result)
-        if result[player['Name']] == None:
-            print('no roster spot available')
-            return RedirectResponse('/draft?status=unrosterable')
     
+    # REMOVE/COMMENT OUT THE ENTIRE ROSTER CHECK TO JUST ADD THE PLAYER
+    # results = fu.check_roster_pos(player, roster, df, fu.pos_order)
+    # print("Results from first check_roster_pos:", results)
+    # for result in results:
+    #     print('Processing result:', result)
+    #     for val in result.values():
+    #         if val is None:
+    #             print('no roster spot available')
+    #             return RedirectResponse('/draft?status=unrosterable')
+   
+    # Just add the player directly without position checking
     conn = engine.connect()
     meta.create_all(engine)
     conn.execute(players.update().values(Paid=price, Supp=supp, Owner=owner, Timestamp=datetime.now()).where(players.c.cbsid==cbsid))
     conn.commit()
     conn.close()
-    return RedirectResponse('/draft') #{'cbsid':cbsid, 'price':price, 'owner':owner}
+    return RedirectResponse('/draft', status_code=303)
+
+#@app.get("/draft/update_bid")
+#async def update_db(cbsid=int, owner=str, price=int, supp=Optional[int] == 0):
+#    print(f"Endpoint triggered for cbsid: {cbsid}, owner: {owner}")
+#
+#    # Reset the draft player tracking
+#    if hasattr(fu.check_roster_pos, '_current_draft_player'):
+#        delattr(fu.check_roster_pos, '_current_draft_player')
+#
+#    df = pd.read_sql(f"SELECT cbsid, Name, '{owner}' As Owner, Pos, COALESCE(Paid,{price},0) Paid, Supp, Team, Timestamp, Keeper, Value FROM players{datetime.now().year} WHERE Owner='{owner}' or cbsid={cbsid}", engine)
+#    df.loc[df['cbsid']==int(cbsid), ['Paid', 'Supp']] = [int(price), int(supp)]
+#    
+#    player = df[df['cbsid']==int(cbsid)].iloc[0][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
+#    roster = build_roster(n_teams, owner_list, df, fu.pos_order)
+#    
+#    # Debug your roster to check pitcher positions specifically
+#    print("Current roster for", owner)
+#    pitcher_positions = [pos for pos in fu.pos_order if pos.startswith('P')]
+#    for pos in pitcher_positions:
+#        player_name = roster.loc[pos, owner]
+#        print(f"{pos}: {player_name if player_name != 0 else 'EMPTY'}")#
+#
+#    results = fu.check_roster_pos(player, roster, df, fu.pos_order)
+#    
+#    # Check if we couldn't find a position
+#    if not results:
+#        print('Empty results returned')
+#        return RedirectResponse('/draft?status=unrosterable')
+#    
+#    for result in results:
+#        for val in result.values():
+#            if val is None:
+#                print('no roster spot available')
+#                return RedirectResponse('/draft?status=unrosterable')#
+#
+#    conn = engine.connect()
+#    meta.create_all(engine)
+#    conn.execute(players.update().values(Paid=price, Supp=supp, Owner=owner, Timestamp=datetime.now()).where(players.c.cbsid==cbsid))
+#    conn.commit()
+#    conn.close()
+#    return RedirectResponse('/draft', status_code=303)
 
 
 
 @app.get("/draft/sims/{cbsid}")
-async def sim_players(cbsid: int):
+def sim_players(cbsid: int):
     h = pd.read_sql(f"SELECT * FROM players{datetime.now().year} WHERE cbsid IS NOT NULL", engine)
 
     if h[h['cbsid']==int(cbsid)].iloc[0]['Primary_Pos'] in ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH']:
@@ -299,6 +398,7 @@ async def get_bids(request: Request):
     o.fillna({'$ Left':260, 'Max Bid':237, 'Drafted':0, '$ Left/Plyr':11.3},inplace=True)
     o['$ Left'] = o['$ Left'].astype(int)
     #player_data = pd.read_sql(f"SELECT * FROM players{datetime.now().year} WHERE cbsid={cbsid}", engine).set_index('cbsid').to_dict(orient='index')
+    print(data['player_data'])
     bids = fu.simulate_auction(data['player_data'], o.to_dict(orient='index'), roster.set_index('Pos'), .4)
     return bids #{'post':data, 'bids':bids}
 
