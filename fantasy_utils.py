@@ -44,7 +44,7 @@ class Fantasy_Projections():
         self.quals = None
         #self.qual_p = None
         
-        self.proj_systems = ['atc', 'thebat', 'fangraphsdc', 'steamer', 'zips']
+        self.proj_systems = ['atc', 'thebat', 'fangraphsdc', 'steamer']
         self.pos_hierarchy = ['C', '2B', '3B', 'SS', 'OF', '1B', 'DH', 'SP', 'RP', 'P']
         self.keepers_url = 'https://docs.google.com/spreadsheets/d/1dwDC2uMsfVRYeDECKLI0Mm_QonxkZvTkZTfBgnZo7-Q/edit#gid=1723951361'
 
@@ -189,6 +189,8 @@ class Fantasy_Projections():
             try:
                 temp = pd.read_csv(f'data/{datetime.now().year}-{proj_file}-proj-h.csv', encoding="latin-1")
                 temp.rename(columns={'SO':'K'},inplace=True)
+                if 'HBP' not in temp.columns:
+                    temp['HBP'] = 0
                 temp['sys'] = proj_file
                 h = pd.concat([h, temp])
                 print(f'Found {proj_file}')
@@ -223,15 +225,18 @@ class Fantasy_Projections():
         # Collapse projections into one per cbsid and take the average for each stat
         # Then merge with original dataframe to get the player's name and team
         # Drop duplicates by cbsid since the previous merge will duplicate rows
-        proj = pd.pivot_table(h, index='cbsid', values=['G', 'PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB', 'BB', 'HBP', 'SF', 'SH', 'TB'], aggfunc='mean')\
+        proj = pd.pivot_table(h, index='cbsid', values=['G', 'PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB', 'BB', 'HBP', 'K', 'SF', 'SH', 'TB', 'Vol', 'Skew', 'Dim', 'wRC+'], aggfunc='mean')\
             .merge(h[['cbsid', 'playerid', 'Name', 'Team']], on='cbsid', how='inner').drop_duplicates('cbsid') # drop by cbsid b/c when this is the same, the data avgs for the entries are the same
         # Helps with sorting later when we need to find the top 12 players at a position.
         proj['sorter'] = proj['HR']+proj['R']+proj['RBI']+proj['H']+proj['SB']
+        
         # Calculate some rate stats
         proj['BA'] = proj['H']/proj['AB']
         proj['OBP'] = (proj['H']+proj['BB']+proj['HBP']) / (proj['AB']+proj['BB']+proj['HBP']+proj['SF'])
         proj['SLG'] = proj['TB'] / proj['AB']
         proj['OPS'] = proj['OBP'] + proj['SLG']
+        proj['K%'] = proj['K']/proj['PA']
+        proj['BB%'] = proj['BB']/proj['PA']
         # Merge with the CBS projections. Because I use a CBS system, every ID and Name and Position should come from there. 
         # This step brings in the CBS designated position and rank
         proj = proj.merge(cbs[['cbsid', 'Pos', 'Rank']], how='inner', on='cbsid').drop_duplicates('cbsid')
@@ -248,8 +253,27 @@ class Fantasy_Projections():
         proj['Primary_Pos'] = proj['Pos'].apply(lambda x: self.find_primary_pos(x) if type(x) != float else x)
 
         lyh = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-h.csv', encoding='latin1')
-        lyh.rename(columns={'PA':'PA_ly', 'AB':'AB_ly', 'HR':'HR_ly', 'R':'R_ly', 'RBI':'RBI_ly', 'SB':'SB_ly', 'BB':'BB_ly', 'H':'H_ly', 'AVG':'BA_ly', 'HBP':'HBP_ly'},inplace=True)
-        proj = proj.merge(lyh[['cbsid', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'BB_ly', 'HBP_ly']], on='cbsid',how='left')
+        lyh.rename(columns={'PA':'PA_ly', 'AB':'AB_ly', 'HR':'HR_ly', 'R':'R_ly', 'RBI':'RBI_ly', 'SB':'SB_ly', 'BB':'BB_ly', 'K':'K_ly', 'H':'H_ly', 'AVG':'BA_ly', 'HBP':'HBP_ly'},inplace=True)
+        proj = proj.merge(lyh[['cbsid', 'PA_ly', 'H_ly', 'AB_ly', 'HR_ly', 'SB_ly', 'R_ly', 'RBI_ly', 'BA_ly', 'BB_ly', 'HBP_ly', 'K_ly']], on='cbsid',how='left')
+
+        # Merge with StatCast data if it exists
+        try:
+            stat_cast = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year-1}-statcast.csv')
+            sc_ly = stat_cast[stat_cast['year']==datetime.now().year-1][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg', 'K/9', 'K-BB%', 'ff_avg_speed', 'fastball_avg_speed', 'fastball_avg_break_z_induced', 'whiff_percent', 'home_run', 'pa', 'r_total_stolen_base', 'r_run', 'b_rbi', 'batting_avg', 'p_quality_start', 'p_SvHld', 'p_strikeout', 'p_out', 'p_era', 'p_whip']]
+            sc_ly.rename(columns={col:col+'_ly' for col in sc_ly.columns if col not in ['cbsid', 'MLBID', 'player_name', 'year']},inplace=True)
+
+            sc_2ly = stat_cast[stat_cast['year']==datetime.now().year-2][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg', 'K/9', 'K-BB%', 'ff_avg_speed', 'fastball_avg_speed', 'fastball_avg_break_z_induced', 'whiff_percent', 'home_run', 'pa', 'r_total_stolen_base', 'r_run', 'b_rbi', 'batting_avg', 'p_quality_start', 'p_SvHld', 'p_strikeout', 'p_out', 'p_era', 'p_whip']]
+            sc_2ly.rename(columns={col:col+'_2ly' for col in sc_2ly.columns if col not in ['cbsid', 'MLBID', 'player_name', 'year']},inplace=True)
+
+            proj.rename(columns={'PA_ly':'pa_ly_'},inplace=True)
+            proj = proj.merge(sc_ly, on='cbsid', how='left').merge(sc_2ly, on='cbsid', how='left').drop_duplicates('cbsid')
+            proj.fillna({'MLBID_x':proj['MLBID_y'], 'year_x':proj['year_y']},inplace=True)
+            proj.drop(columns=['MLBID_y', 'player_name_x', 'player_name_y', 'year_y'],inplace=True)
+            proj.rename(columns={'MLBID_x':'MLBID', 'year_x':'year'},inplace=True)
+            proj['Age'] = proj['player_age_ly']+1
+        except:
+            print('There is a problem with the StatCast data')
+            pass
 
         # Save hitting projections to the class
         self.hitting_data = proj.sort_values('sorter', ascending=False)
@@ -292,7 +316,7 @@ class Fantasy_Projections():
 
         p = p[(p['IP']>1)]
 
-        proj = pd.pivot_table(p, index='cbsid', values=['GS', 'G', 'IP', 'ER', 'HA', 'SO', 'BB', 'QS', 'SV', 'HLD', 'SvHld'], aggfunc='mean')\
+        proj = pd.pivot_table(p, index='cbsid', values=['GS', 'G', 'IP', 'TBF', 'ER', 'HA', 'SO', 'BB', 'QS', 'SV', 'HLD', 'SvHld', 'Vol', 'Skew', 'Dim'], aggfunc='mean')\
             .merge(p[['cbsid', 'playerid', 'Name', 'Team']], on='cbsid', how='inner').drop_duplicates('cbsid') # drop by cbsid b/c when this is the same, the data avgs for the entries are the same
         proj['sorter'] = proj['SO']+(proj['SvHld']*4)+proj['QS']
         for i in ['IP', 'GS', 'G', 'HA', 'SO', 'ER', 'BB', 'QS', 'SV', 'HLD', 'SvHld']:
@@ -300,6 +324,10 @@ class Fantasy_Projections():
             proj[i] = proj[i].apply(lambda x: int(x))
         proj['ERA'] = proj['ER']/proj['IP']*9
         proj['WHIP'] = (proj['HA']+proj['BB'])/proj['IP']
+        proj['K%'] = round(proj['SO']/proj['TBF'],4)
+        proj['BB%'] = round(proj['BB']/proj['TBF'],4)
+        proj['K-BB%'] = round(proj['K%']-proj['BB%'],4)
+        proj['K/9'] = round(proj['SO']/proj['IP']*9,4)
         # Merge data with CBS auction values
         cbs_auction_values = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
         proj = proj.merge(cbs_auction_values[['cbsid', 'CBS']], on='cbsid', how='left')
@@ -321,6 +349,25 @@ class Fantasy_Projections():
         lyp['SvHld_ly'] = lyp['SV_ly']+lyp['HLD_ly']
 
         proj = proj.merge(lyp[['cbsid', 'IP_ly', 'ER_ly', 'HA_ly', 'BB_ly', 'ERA_ly', 'WHIP_ly', 'SvHld_ly', 'QS_ly', 'SO_ly']], on='cbsid',how='left')
+
+        # Merge with StatCast data if it exists
+        try:
+            stat_cast = pd.read_csv(rf'C:\Users\pddnh\Documents\GitHub\xdl\data\{datetime.now().year-1}-statcast.csv')
+            sc_ly = stat_cast[stat_cast['year']==datetime.now().year-1][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg', 'K/9', 'K-BB%', 'ff_avg_speed', 'fastball_avg_speed', 'fastball_avg_break_z_induced', 'whiff_percent', 'home_run', 'pa', 'r_total_stolen_base', 'r_run', 'b_rbi', 'batting_avg', 'p_quality_start', 'p_SvHld', 'p_strikeout', 'p_out', 'p_era', 'p_whip']]
+            sc_ly.rename(columns={col:col+'_ly' for col in sc_ly.columns if col not in ['cbsid', 'MLBID', 'player_name', 'year']},inplace=True)
+
+            sc_2ly = stat_cast[stat_cast['year']==datetime.now().year-2][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg', 'K/9', 'K-BB%', 'ff_avg_speed', 'fastball_avg_speed', 'fastball_avg_break_z_induced', 'whiff_percent', 'home_run', 'pa', 'r_total_stolen_base', 'r_run', 'b_rbi', 'batting_avg', 'p_quality_start', 'p_SvHld', 'p_strikeout', 'p_out', 'p_era', 'p_whip']]
+            sc_2ly.rename(columns={col:col+'_2ly' for col in sc_2ly.columns if col not in ['cbsid', 'MLBID', 'player_name', 'year']},inplace=True)
+
+            proj.rename(columns={'PA_ly':'pa_ly_'},inplace=True)
+            proj = proj.merge(sc_ly, on='cbsid', how='left').merge(sc_2ly, on='cbsid', how='left').drop_duplicates('cbsid')
+            proj.fillna({'MLBID_x':proj['MLBID_y'], 'year_x':proj['year_y']},inplace=True)
+            proj.drop(columns=['MLBID_y', 'player_name_x', 'player_name_y', 'year_y'],inplace=True)
+            proj.rename(columns={'MLBID_x':'MLBID', 'year_x':'year'},inplace=True)
+            proj['Age'] = proj['player_age_ly']+1
+        except:
+            print('There is a problem with the StatCast data')
+            pass
 
         self.pitching_data = proj.sort_values('sorter', ascending=False)
         return proj
@@ -452,6 +499,7 @@ pos_elig = {
     '3B':['3B', 'CI', 'DH1', 'DH2'],
     'SS':['SS', 'MI', 'DH1', 'DH2'],
     'OF':['OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2'],
+    'DH':['DH1', 'DH2'],
     'SP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
     'RP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
     'P':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']
@@ -623,7 +671,7 @@ def owners(conv, n_teams=12, tm_players=23):
 
 
 
-def check_roster_pos(roster, name, team_name, pos, eligible):
+def OLD_check_roster_pos(roster, name, team_name, pos, eligible):
     eligible_at = eligible.split('/')
     eligibility = []
     for p in eligible.split('/'):
@@ -766,8 +814,107 @@ def get_eligible_positions(pos, pos_order):
 
 pos_order = ['C', 'MI', 'CI', 'DH1', 'DH2', '2B', '3B', 'SS', '1B', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
 
+def check_roster_pos(player, roster, df, pos_order, is_draft_operation=False):
+    """
+    Place a player on the roster by finding a valid permutation of positions
+    """
+    print(f"Function called for: {player['Name']} (cbsid: {player['cbsid']})")
+    
+    # Skip duplicate processing only during draft operations, not during general roster building
+    if is_draft_operation:
+        # Check if this player is being processed for the first time in this draft operation
+        player_id = f"{player['cbsid']}_{player['Owner']}"
+        if hasattr(check_roster_pos, '_current_draft_player') and check_roster_pos._current_draft_player == player_id:
+            print(f"Skipping duplicate processing for: {player['Name']} during draft")
+            return []
+        check_roster_pos._current_draft_player = player_id
+    
+    # Check if this player is already on the roster
+    team_roster = roster[player['Owner']]
+    existing_players = team_roster[team_roster != 0].values
+    if player['Name'] in existing_players:
+        print(f"{player['Name']} is already on the roster, skipping re-rostering")
+        return []  # Return empty list to indicate no action needed
+    
+    eligibility = get_eligible_positions(player['Pos'], pos_order)
+    print(f"Eligible positions for {player['Name']}: {eligibility}")
+    
+    # Get current team roster
+    team_roster = roster[player['Owner']]
+    
+    # Find current players and their original positions
+    current_players = team_roster[team_roster != 0]
+    
+    # Get all current rostered positions
+    rostered_positions = current_players.index.tolist()
+    rostered_positions = [p.strip().upper() for p in rostered_positions]
+    print(f"Currently rostered positions for {player['Owner']}: {rostered_positions}")
+    
+    # First check rostered_positions for a free spot
+    for position in eligibility:
+        position = position.strip().upper()
+        print(f"Checking position: {position}")
+        if position not in rostered_positions:
+            print(f"Found free spot for {player['Name']} at {position}")
+            result = [{player['Name']: position}]
+            print(f"Returning: {result}")
+            return result
+            
+    print('No free spot found initially, looking for bumps')
+    
+    # Create a list of possible moves, sorted by optimal placement
+    possible_moves = []
+    
+    # Loop through the drafted player's eligible positions
+    for p in eligibility:
+        # Find name of player currently in each roster spot
+        used_pos_player_name = roster.loc[p, player['Owner']]
+        
+        # Skip empty spots (should be caught above, but just in case)
+        if used_pos_player_name == 0 or not used_pos_player_name:
+            print(f"Position {p} is actually free, assigning {player['Name']}")
+            return [{player['Name']: p}]
+            
+        # Find the other positions this player could potentially move to
+        player_pos_data = df[df['Name'] == used_pos_player_name]['Pos']
+        if player_pos_data.empty:
+            print(f"Warning: Could not find position data for {used_pos_player_name}")
+            continue
+            
+        used_pos_player_positions = get_eligible_positions(player_pos_data.iloc[0], pos_order)
+        print(f"{p} is currently used by {used_pos_player_name}. {used_pos_player_name} is also eligible at {used_pos_player_positions}")
+        
+        # Calculate versatility (number of positions a player can play)
+        current_player_versatility = len(used_pos_player_positions)
+        new_player_versatility = len(eligibility)
+        
+        # Loop through the already rostered player's eligible positions
+        for p2 in used_pos_player_positions:
+            p2 = p2.strip().upper()
+            # If the rostered player can move to an open position
+            if p2 not in rostered_positions:
+                # Add this move to possible moves with score based on versatility difference
+                # Higher score = better move (player with more positions should be in more flexible spot)
+                score = current_player_versatility - new_player_versatility
+                possible_moves.append({
+                    'score': score,
+                    'move': [{player['Name']: p}, {used_pos_player_name: p2}]
+                })
+    
+    # Sort possible moves by score (highest first)
+    possible_moves.sort(key=lambda x: x['score'], reverse=True)
+    
+    # If we found any possible moves, return the best one
+    if possible_moves:
+        best_move = possible_moves[0]['move']
+        print(f"Best move found: {best_move}")
+        return best_move
+    
+    print(f'Unable to roster {player["Name"]}')
+    return [{player['Name']: None}]
 
-def check_roster_pos(player, roster, df, pos_order):
+
+def WORKS_check_roster_pos(player, roster, df, pos_order, is_draft_operation=False):
     """
     Place a player on the roster by finding a valid permutation of positions
     
@@ -781,7 +928,19 @@ def check_roster_pos(player, roster, df, pos_order):
     Returns:
     str or None: Assigned position, or None if no placement possible
     """
+    print(f"Function called for: {player['Name']} (cbsid: {player['cbsid']})")
+
+    # Skip duplicate processing only during draft operations, not during general roster building
+    if is_draft_operation:
+        # Check if this player is being processed for the first time in this draft operation
+        player_id = f"{player['cbsid']}_{player['Owner']}"
+        if hasattr(check_roster_pos, '_current_draft_player') and check_roster_pos._current_draft_player == player_id:
+            print(f"Skipping duplicate processing for: {player['Name']} during draft")
+            return []
+        check_roster_pos._current_draft_player = player_id
+
     eligibility = get_eligible_positions(player['Pos'], pos_order)
+    print(f"Eligible positions for {player['Name']}: {eligibility}")
     
     # Get current team roster
     team_roster = roster[player['Owner']]
@@ -791,38 +950,58 @@ def check_roster_pos(player, roster, df, pos_order):
     
     # Get all current rostered positions
     rostered_positions = current_players.index.tolist()
-    
+    rostered_positions = [p.strip().upper() for p in rostered_positions]
+
     # Combine current players with new player
     #all_players = list(current_players.values) + [name]
-
+    print(f"Function called for: {player['Name']}")
     # First check rostered_positions for a free spot
     for position in eligibility:
+        position = position.strip().upper()
+        #print(f"Checking position: {position}")
         if position not in rostered_positions:
             #roster.loc[position, player['Owner']] = player['Name']
             # End function looping b/c we found a place to put the player
-            return [{player['Name']:position}]
+            print(f"Found free spot for {player['Name']} at {position}")
+            result = [{player['Name']: position}]
+            print(f"About to return: {result}")
+            return result
+        
+    print("No eligible positions found, function is ending without return.")
 
     # Loop through the drafted player's eligible positions
-    bump = False
+    #bump = False
     for p in eligibility:
         # Find name of player currently in each roster spot
         used_pos_player_name = roster.loc[p, player['Owner']]
+
+        # Skip empty spots (should be caught above, but just in case)
+        if used_pos_player_name == 0 or not used_pos_player_name:
+            print(f"Position {p} is actually free, assigning {player['Name']}")
+            return [{player['Name']: p}]
+        
+        # Find the other positions this player could potentially move to
+        player_pos_data = df[df['Name'] == used_pos_player_name]['Pos']
+        if player_pos_data.empty:
+            print(f"Warning: Could not find position data for {used_pos_player_name}")
+            continue
+
         # Find the other positions this player could potentially move to
         used_pos_player_positions = get_eligible_positions(df[df['Name']==used_pos_player_name]['Pos'].iloc[0], pos_order)
         print(f"{p} is currently used by {used_pos_player_name}. {used_pos_player_name} is also eligible at {used_pos_player_positions}")
         # Loop through the already rostered player's eligible positions
         for p2 in used_pos_player_positions:
+            p2 = p2.strip().upper()
             # If the rostered player can move to an open position, put him there and put the newly drafted player in his spot
             if p2 not in rostered_positions:
                 print(f"{used_pos_player_name} is eligible to move to {p2}. Moving {used_pos_player_name} to {p2}. Rostering {player['Name']} in {p}")
                 #roster.loc[p2, player['Owner']] = used_pos_player_name
                 #roster.loc[p, player['Owner']] = player['Name']
                 # Set bump to True
-                bump = True
+                #bump = True
+                print(f"{used_pos_player_name} is eligible to move to {p2}. Moving {used_pos_player_name} to {p2}. Rostering {player['Name']} in {p}")
                 # Get out of the loop now that we found someone who can move
                 return [{player['Name']:p}, {used_pos_player_name:p2}]
-        if bump == True:
-            break
     
     print(f'Unable to roster {player["Name"]}')
     return [{player['Name']:None}]
