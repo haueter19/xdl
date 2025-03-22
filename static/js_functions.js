@@ -74,15 +74,28 @@ $.fn.tiers = function(){
     let p_id = [];
     let color_map = [];
     var j = 0;
-    $.each(data, function(i, v){
+    var sortOrder = ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH', 'SP', 'RP'] 
+    // Sort the data by Primary_Pos then curValue
+    var sortedData = data.sort(function(a, b) {
+        var posA = sortOrder.indexOf(a.Primary_Pos);
+        var posB = sortOrder.indexOf(b.Primary_Pos);
+
+        if (posA === posB) {
+            // Secondary sort by curValue
+            return b.curValue - a.curValue;
+        }
+
+        return posA - posB;
+    });
+    $.each(sortedData, function(i, v){
         if (v.z>-2.5){
             x_data.push(v.Primary_Pos);
-            y_data.push(data[i]['curValue']);
-            hover_data.push(data[i]['Name']+'<br>ID: '+data[i]['cbsid']+'<br>Value: $'+data[i]['Value']+'<br>Market Value: $'+data[i]['curValue']);
-            if (data[i]['Owner']){
+            y_data.push(sortedData[i]['curValue']);
+            hover_data.push(sortedData[i]['Name']+'<br>ID: '+sortedData[i]['cbsid']+'<br>Value: $'+sortedData[i]['Value']+'<br>Market Value: $'+sortedData[i]['curValue']);
+            if (sortedData[i]['Owner']){
                 color_map.push('gray');
             } else {
-                if (data[i]['surplus']>6){
+                if (sortedData[i]['surplus']>6){
                     color_map.push('green');
                 } else {
                     color_map.push('lightblue');
@@ -95,18 +108,18 @@ $.fn.tiers = function(){
     tiers_data = [
         {
             type: 'scatter',
-            x:x_data,
-            y:y_data,
-            text:hover_data,
+            x: x_data,
+            y: y_data,
+            text: hover_data,
             //hovermode:'closest',
             mode:'markers',
-            customtext:p_id,
-            marker: { color: color_map, opacity:.6, size:10, line:{color:'gray', width:1}},
+            customtext: p_id,
+            marker: { color: color_map, opacity:.5, size:9, line:{color:'gray', width:1}},
             hovertemplate: "%{text}"
             
         }
     ]
-    layout = {title: "Positional Tiers", hovermode:'closest', height: 500, width: 1300, margin: {l:20, t:30},
+    layout = {title: "Positional Tiers", hovermode:'closest', height: 500, width: 1300, margin: {l:20, t:30}, yaxis: {range: [-15,45]},
     shapes: [
             {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 35.7, y1: 35.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
             {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 27.6, y1: 27.6, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
@@ -158,23 +171,25 @@ $.fn.paid_histogram = function(){
 
 
 $.fn.update_player_stats_window = function(selected_index){
-    let tbl_html = '<table class="table" id="player_table">'
-    +'<tr><thead><th>cbsid</th><th>Name</th><th>Team</th><th>Pos</th><th>Age</th><th>Proj Value</th><th>Market</th><th>CBS</th><th>FG</th><th>Val_ly</th><th>Z</th></thead></tr>'
+    let tbl_html = '<table class="table fs-6" id="player_table">'
+    +'<tr><thead><th>cbsid</th><th>Name</th><th>Team</th><th>Pos</th><th>Age</th><th>Proj Value</th><th>Market</th><th>CBS</th><th>FG</th><th>Val_ly</th><th>Z</th><th>Vol</th><th>Skew</th></thead></tr>'
     +'<tr><td>'+data[selected_index]['cbsid']+'</td>'
     +'<td>'+data[selected_index]['Name']+'</td>'
     +'<td>'+data[selected_index]['Team']+'</td>'
     +'<td>'+data[selected_index]['Pos']+'</td>'
-    +'<td>'+data[selected_index]['Age']+'</td>'
+    +'<td>'+data[selected_index]['player_age_ly']+'</td>'
     +'<td><font color="red">$'+data[selected_index]['Value']+'</font></td>'
     +'<td>'+data[selected_index]['curValue']+'</td>'
     +'<td>'+data[selected_index]['CBS']+'</td>'
     +'<td>'+data[selected_index]['Dollars']+'</td>'
     +'<td>'+data[selected_index]['Value_ly']+'</td>'
     +'<td>'+data[selected_index]['z']+'</td>'
+    +'<td>'+data[selected_index]['Vol'].toFixed(2)+'</td>'
+    +'<td>'+data[selected_index]['Skew'].toFixed(2)+'</td>'
     +'</tr></table><br>'
-    
     if ((data[selected_index]['Primary_Pos']=='SP') || (data[selected_index]['Primary_Pos']=='RP')){
-        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>S+H</th><th>FIP</th><th>HR/9</th><th>K/9</th><th>BB/9</th><th>K%</th><th>BB%</th></thead></tr>'
+        tbl_html += `<table class="table table-striped fs-6"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>S+H</th>
+        <th>K-BB%</th><th>K/9</th><th>Velo</th><th>IVB</th><th>woba_diff</th><th>Whiff%</th><th>EV</th></thead></tr>`
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['IP']+'</td>'
         +'<td>'+data[selected_index]['ERA']+'</td>'
@@ -183,23 +198,41 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['QS']+'</td>'
         +'<td>'+data[selected_index]['SvHld']+'</td>'
         +'</tr><tr><td>2024</td>'
-        +'<td>'+data[selected_index]['IP_ly']+'</td>'
-        +'<td>'+data[selected_index]['ERA_ly']+'</td>'
-        +'<td>'+data[selected_index]['WHIP_ly']+'</td>'
-        +'<td>'+data[selected_index]['SO_ly']+'</td>'
-        +'<td>'+data[selected_index]['QS_ly']+'</td>'
-        +'<td>'+data[selected_index]['SvHld_ly']+'</td>'
-        +'<td>'+data[selected_index]['FIP']+'</td>'
-        +'<td>'+data[selected_index]['HR/9']+'</td>'
-        +'<td>'+data[selected_index]['K/9']+'</td>'
-        +'<td>'+data[selected_index]['BB/9']+'</td>'
-        +'<td>'+data[selected_index]['K%']+'</td>'
-        +'<td>'+data[selected_index]['BB%']+'</td>'
+        +'<td>'+(data[selected_index]['p_out_ly']/3).toFixed(1)+'</td>'
+        +'<td>'+data[selected_index]['p_era_ly']+'</td>'
+        +'<td>'+Number(data[selected_index]['p_whip_ly']).toFixed(2)+'</td>'
+        +'<td>'+data[selected_index]['p_strikeout_ly']+'</td>'
+        +'<td>'+data[selected_index]['p_quality_start_ly']+'</td>'
+        +'<td>'+data[selected_index]['p_SvHld_ly']+'</td>'
+        +'<td>'+(data[selected_index]['K-BB%_ly']*100).toFixed(1)+'%</td>'
+        +'<td>'+Number(data[selected_index]['K/9_ly']).toFixed(1)+'</td>'
+        +'<td>'+data[selected_index]['fastball_avg_speed_ly']+'</td>'
+        +'<td>'+data[selected_index]['fastball_avg_break_z_induced_ly']+'</td>'
+        +'<td>'+data[selected_index]['woba_diff_ly']+'</td>'
+        +'<td>'+data[selected_index]['whiff_percent_ly']+'%</td>'
+        +'<td>'+data[selected_index]['exit_velocity_avg_ly']+'</td>'
+        +'</tr>'
+        // 2 years ago
+        +'<tr><td>2023</td>'
+        +'<td>'+(data[selected_index]['p_out_2ly']/3).toFixed(1)+'</td>'
+        +'<td>'+data[selected_index]['p_era_2ly']+'</td>'
+        +'<td>'+Number(data[selected_index]['p_whip_2ly']).toFixed(2)+'</td>'
+        +'<td>'+data[selected_index]['p_strikeout_2ly']+'</td>'
+        +'<td>'+data[selected_index]['p_quality_start_2ly']+'</td>'
+        +'<td>'+data[selected_index]['p_SvHld_2ly']+'</td>'
+        +'<td>'+(data[selected_index]['K-BB%_2ly']*100).toFixed(1)+'%</td>'
+        +'<td>'+Number(data[selected_index]['K/9_2ly']).toFixed(1) +'</td>'
+        +'<td>'+data[selected_index]['fastball_avg_speed_2ly']+'</td>'
+        +'<td>'+data[selected_index]['fastball_avg_break_z_induced_2ly']+'</td>'
+        +'<td>'+data[selected_index]['woba_diff_2ly']+'</td>'
+        +'<td>'+data[selected_index]['whiff_percent_2ly']+'%</td>'
+        +'<td>'+data[selected_index]['exit_velocity_avg_2ly']+'</td>'
         +'</tr></table>'
     } else {
-        tbl_html += '<table class="table table-striped"><tr><thead><th>Type</th><th>PA</th><th>xwOBA</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>Brl%</th><th>BB%</th><th>K%</th><th>Cont%</th></thead></tr>'
+        tbl_html += `<table class="table table-striped fs-6"><tr><thead><th>Type</th><th>PA</th><th>wOBAdiff</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th>
+        <th>Brl%</th><th>EV</th><th>Spd</th><th>Whiff%</th><th>wRC+</th></thead></tr>`
         +'<tr><td>Proj</td>'
-        +'<td>'+data[selected_index]['PA']+'</td>'
+        +'<td>'+data[selected_index]['PA'].toFixed(1)+'</td>'
         +'<td>-</td><td>-</td>'
         +'<td>'+data[selected_index]['BA']+'</td>'
         +'<td>'+data[selected_index]['HR']+'</td>'
@@ -207,18 +240,34 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['R']+'</td>'
         +'<td>'+data[selected_index]['RBI']+'</td>'
         +'</tr><tr><td>2024</td>'
-        +'<td>'+data[selected_index]['PA_ly']+'</td>'
-        +'<td>'+data[selected_index]['xwOBA']+'</td>'
-        +'<td>'+data[selected_index]['xBA']+'</td>'
-        +'<td>'+data[selected_index]['BA_ly']+'</td>'
-        +'<td>'+data[selected_index]['HR_ly']+'</td>'
-        +'<td>'+data[selected_index]['SB_ly']+'</td>'
-        +'<td>'+data[selected_index]['R_ly']+'</td>'
-        +'<td>'+data[selected_index]['RBI_ly']+'</td>'
-        +'<td>'+data[selected_index]['Barrel%']+'</td>'
-        +'<td>'+data[selected_index]['BB%']+'</td>'
-        +'<td>'+data[selected_index]['K%']+'</td>'
-        +'<td>'+data[selected_index]['Contact%']+'</td>'
+        +'<td>'+data[selected_index]['pa_ly']+'</td>'
+        +'<td>'+data[selected_index]['woba_diff_ly']+'</td>'
+        +'<td>'+data[selected_index]['xba_ly']+'</td>'
+        +'<td>'+data[selected_index]['batting_avg_ly']+'</td>'
+        +'<td>'+data[selected_index]['home_run_ly']+'</td>'
+        +'<td>'+data[selected_index]['r_total_stolen_base_ly']+'</td>'
+        +'<td>'+data[selected_index]['r_run_ly']+'</td>'
+        +'<td>'+data[selected_index]['b_rbi_ly']+'</td>'
+        +'<td>'+data[selected_index]['barrel_batted_rate_ly']+'</td>'
+        +'<td>'+data[selected_index]['exit_velocity_avg_ly']+'</td>'
+        +'<td>'+data[selected_index]['sprint_speed_ly']+'</td>'
+        +'<td>'+data[selected_index]['whiff_percent_ly']+'</td>'
+        +'<td>'+data[selected_index]['wRC+'].toFixed(0)+'</td>'
+        // 2 years ago
+        +'</tr><tr><td>2023</td>'
+        +'<td>'+data[selected_index]['pa_2ly']+'</td>'
+        +'<td>'+data[selected_index]['woba_diff_2ly']+'</td>'
+        +'<td>'+data[selected_index]['xba_2ly']+'</td>'
+        +'<td>'+data[selected_index]['batting_avg_2ly']+'</td>'
+        +'<td>'+data[selected_index]['home_run_2ly']+'</td>'
+        +'<td>'+data[selected_index]['r_total_stolen_base_2ly']+'</td>'
+        +'<td>'+data[selected_index]['r_run_2ly']+'</td>'
+        +'<td>'+data[selected_index]['b_rbi_2ly']+'</td>'
+        +'<td>'+data[selected_index]['barrel_batted_rate_2ly']+'</td>'
+        +'<td>'+data[selected_index]['exit_velocity_avg_2ly']+'</td>'
+        +'<td>'+data[selected_index]['sprint_speed_2ly']+'</td>'
+        +'<td>'+data[selected_index]['whiff_percent_2ly']+'</td>'
+        +'<td></td>'
         +'</tr></table>'
     }
     
