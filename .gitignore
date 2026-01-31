@@ -4,7 +4,7 @@ __pycache__
 /data
 *.html
 *.ipynb_checkpoints
-.env/
+.env
 *.png
 *.ipynb
 anaconda_projects\db\project_filebrowser.db
