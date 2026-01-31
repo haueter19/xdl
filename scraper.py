@@ -17,6 +17,8 @@ import shutil
 from sqlalchemy import create_engine
 import time
 
+load_dotenv()
+
 class Scraper():
     def __init__(self):
         self.chromedriver_path = r"C:\ProgramData\Anaconda3\WebDriver\bin\chromedriver.exe"
