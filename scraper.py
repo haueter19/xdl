@@ -182,7 +182,6 @@ class Scraper():
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
-        print('Waiting for projections page to load...')
         if stats_type == 'h':
             print(f"Stats type: {stats_type}")
             print(f"Accessing URL: {self.cbs_ros_proj_url_h}")
@@ -246,9 +245,10 @@ class Scraper():
                 df[col] = df[col].astype(int)
             for col in ['ERA', 'WHIP']:
                 df[col] = df[col].astype(float)
-            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'HR', 'Rank']]
+            df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
+            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
             # Save to csv if projected IP > 0
-            df[df['INNs']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-projections-{stats_type}.csv', index=False)
+            df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-projections-{stats_type}.csv', index=False)
             print(f'{datetime.now().year}-cbs-projections-{stats_type}.csv saved in {self.destination_path}')
 
         return df
