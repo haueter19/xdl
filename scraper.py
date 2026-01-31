@@ -1,5 +1,7 @@
 from bs4 import BeautifulSoup as bs4
 from datetime import datetime
+from dotenv import load_dotenv
+from io import StringIO
 import math
 import os
 import pandas as pd
@@ -28,11 +30,14 @@ class Scraper():
         service = Service(executable_path=self.chromedriver_path)
         driver = webdriver.Chrome(service=service)
         driver.get('https://www.cbssports.com/login?master_product=150&xurl=https%3A%2F%2Fwww.cbssports.com%2Flogin')
+
+        CBS_LOGIN = os.getenv('CBS_LOGIN')
+        CBS_PASSWORD = os.getenv('CBS_PASSWORD')
         time.sleep(2)
         login_form = driver.find_element(By.ID, 'name')
-        login_form.send_keys('gostros09')
+        login_form.send_keys(CBS_LOGIN)
         login_form = driver.find_element(By.NAME, 'password')
-        login_form.send_keys('Segneri9A')
+        login_form.send_keys(CBS_PASSWORD)
         time.sleep(7)
         # Wait until the "Continue" button is present and clickable
         continue_button = WebDriverWait(driver, 10).until(
@@ -47,22 +52,24 @@ class Scraper():
         driver = webdriver.Chrome(service=service)
         driver.get('https://blogs.fangraphs.com/wp-login.php')
         driver.implicitly_wait(3)
+        FG_LOGIN = os.getenv('FG_LOGIN')
+        FG_PASSWORD = os.getenv('FG_PASSWORD')
         login_form = driver.find_element(By.ID, 'loginform')
         login = driver.find_element(By.ID, 'user_login')
-        login.send_keys('Haueter19')
+        login.send_keys(FG_LOGIN)
         time.sleep(1.2)
         pw = driver.find_element(By.ID, 'user_pass')
-        pw.send_keys('Segneri9@')
+        pw.send_keys(FG_PASSWORD)
         time.sleep(1.4)
         login_form.submit()
         return driver
     
-    def cbs_auction_values(self):
+    def cbs_auction_values(self, driver: Chrome = None):
         try:
             driver = self.cbs_login()
         except:
-            print('Error logging in to CBS')
-            return
+            raise Exception('Error logging in to CBS')
+        
         time.sleep(5)
         driver.get('https://xdl.baseball.cbssports.com/features/projected-salaries')
         time.sleep(5)
@@ -72,7 +79,7 @@ class Scraper():
         # Find the specific table you want
         table = soup.find('table', {'class': 'data'})  # Use appropriate attributes to locate the table
         # Use pandas to read the HTML table
-        df = pd.read_html(str(table), header=1, skiprows=0, extract_links='body')[0]  # [0] to get the first DataFrame if there are multiple
+        df = pd.read_html(StringIO(str(table)), header=1, skiprows=0, extract_links='body')[0]  # [0] to get the first DataFrame if there are multiple
         # Extract the first element of each tuple in the MultiIndex
         new_header = [tup[0] for tup in df.columns]
         # Set the new header
@@ -102,7 +109,7 @@ class Scraper():
         return df
     
 
-    def get_cbs_projections(self, stats_type):
+    def cbs_projections(self, stats_type: str ='h'):
         try:
             driver = self.cbs_login()
         except:
@@ -142,7 +149,7 @@ class Scraper():
         # Find the specific table you want
         table = soup.find('table', {'class': 'data'})
         # Use pandas to read the HTML table skipping 4 rows to get to actual table
-        df = pd.read_html(str(table), header=1, skiprows=1, extract_links='body')[0]
+        df = pd.read_html(StringIO(str(table)), header=1, skiprows=1, extract_links='body')[0]
         # Remove last row and first 2 columns
         df = df.iloc[:-1, 2:]
         # Apply a lambda function to each column to extract the first element of each tuple
@@ -180,7 +187,7 @@ class Scraper():
         driver.quit()
         return df
 
-    def get_fangraphs_projections(self, system_name, stats_type, statgroup='fantasy', fantasypreset='roto5x5'):
+    def fangraphs_projections(self, system_name, stats_type, statgroup='fantasy', fantasypreset='roto5x5'):
         # Launch the scraper
         try:
             driver = self.fangraphs_login()
