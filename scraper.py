@@ -254,24 +254,55 @@ class Scraper():
         return df
 
 
-    def fangraphs_projections(self, system_name, stats_type, statgroup='fantasy', fantasypreset='roto5x5'):
+    def fangraphs_projections(self, system_name, stats_type='h', statgroup='fantasy', fantasypreset='roto5x5'):
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
-        driver.implicitly_wait(self.LONG_WAIT)
+        logger.info(f"Starting Fangraphs projections download: system={system_name}, stats_type={stats_type}, statgroup={statgroup}, fantasypreset={fantasypreset}")
+
         # Define the URL and get the page
         #https://www.fangraphs.com/projections?pos=all&stats=bat&type=steamer
-        url = f"https://www.fangraphs.com/projections?pos=all&type={system_name}&statgroup={statgroup}&fantasypreset={fantasypreset}&stats={stats_type}"
+        if stats_type == 'h':
+            url_stats_type = 'bat'
+        else:
+            url_stats_type = 'pit'
+        
+        url = f"https://www.fangraphs.com/projections?pos=all&type={system_name}&statgroup={statgroup}&fantasypreset={fantasypreset}&stats={url_stats_type}"
+        logger.info(f'Accessing URL: {url}')
         driver.get(url)
         time.sleep(self.SHORT_WAIT)
+
+        # Wait for page to load by checking for the presence of the export button
+        if not driver.current_url.startswith('https://www.fangraphs.com/proj'):
+            driver.get(url)
+            time.sleep(self.SHORT_WAIT)
+            
+        # Wait for table to be visible and get the element
+        export_button = WebDriverWait(driver, self.LONG_WAIT).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "data-export")) # this is the table with the data I want. If CBS changes, this must change as well
+        )
         # Click on the export button
-        export_button = driver.find_element(By.CLASS_NAME, 'data-export')
+        #export_button = driver.find_element(By.CLASS_NAME, 'data-export')
         export_button.click()
+        
         # Set filename
-        filename = f"{datetime.now().year}-{system_name}-proj-{'h' if stats_type=='bat' else 'p'}.csv"
-        time.sleep(self.LONG_WAIT)
+        filename = f"{datetime.now().year}-{system_name}-proj-{stats_type}.csv"
+        time.sleep(5)
+        
+        # Check if file exists in download path
+        try:
+            if not os.path.exists(os.path.join(self.download_path,self.downloaded_fangraphs_filename)):
+                logger.info('File not found initially. Waiting another 5 seconds...')
+                time.sleep(5)
+            else:
+                logger.info('File found in download path.')
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Downloaded file not found: {self.downloaded_fangraphs_filename}")
+        
         # Rename downloaded file appropriately
         os.rename(os.path.join(self.download_path,self.downloaded_fangraphs_filename), os.path.join(self.download_path,filename))
+        
         # Move file to data/ folder
         shutil.move(os.path.join(self.download_path,filename), os.path.join(self.destination_path,filename))
-        return f'{filename} saved in {self.destination_path}'
+        logger.info(f'{filename} saved in {self.destination_path}')
+        return filename
