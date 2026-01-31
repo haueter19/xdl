@@ -5,3 +5,5 @@ __pycache__
 *.html
 *.ipynb_checkpoints
 .env/
+*.png
+*.ipynb
