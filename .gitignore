@@ -7,4 +7,4 @@ __pycache__
 .env/
 *.png
 *.ipynb
-*.project_filebrowser.db
+anaconda_projects\db\project_filebrowser.db
