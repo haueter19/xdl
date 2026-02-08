@@ -43,7 +43,7 @@ class Fantasy_Projections():
         }
         self.quals = None
         #self.qual_p = None
-        
+        self.data_dir = r'C:\GitHub\xdl\player_projections\data'
         self.proj_systems = ['atc', 'thebat', 'fangraphsdc', 'steamer']
         self.pos_hierarchy = ['C', '2B', '3B', 'SS', 'OF', '1B', 'DH', 'SP', 'RP', 'P']
         self.keepers_url = 'https://docs.google.com/spreadsheets/d/1dwDC2uMsfVRYeDECKLI0Mm_QonxkZvTkZTfBgnZo7-Q/edit#gid=1723951361'
@@ -198,7 +198,10 @@ class Fantasy_Projections():
                 print(f"Did not find file {proj_file}")
                 pass
 
-        h = h.drop(columns='ï»¿Name')
+        try:
+            h = h.drop(columns='ï»¿Name')
+        except:
+            pass
         h.rename(columns={'NameASCII':'Name', 'PlayerId':'playerid'},inplace=True)
 
         # Load players table from database
@@ -206,7 +209,7 @@ class Fantasy_Projections():
         # Merge the player ID map with the projections dataframe
         h = h.merge(players[['cbsid', 'CBSNAME', 'IDFANGRAPHS']], left_on='playerid', right_on='IDFANGRAPHS', how='left').sort_values('PA', ascending=False)
         # Add in cbs projections
-        cbs = pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year}-cbs-proj-h.csv')
+        cbs = pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-cbs-proj-h.csv')
         cbs['sys'] = 'cbs'
         cbs.rename(columns={'Positions':'Pos'},inplace=True)
         cbs = cbs.merge(players[['cbsid', 'IDFANGRAPHS']], on='cbsid', how='left')
@@ -241,11 +244,11 @@ class Fantasy_Projections():
         # This step brings in the CBS designated position and rank
         proj = proj.merge(cbs[['cbsid', 'Pos', 'Rank']], how='inner', on='cbsid').drop_duplicates('cbsid')
         # Add CBS auction values. Serves as a reference point to see if my projections seem reasonable
-        cbs_auction_values = pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
+        cbs_auction_values = pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
         proj = proj.merge(cbs_auction_values[['cbsid', 'CBS']], on='cbsid', how='left')
         proj.fillna({'CBS':0},inplace=True)
         # Merge data with Fangraphs Auction Calculator values
-        proj = proj.merge(pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year}-fangraphs-auction-calculator-h.csv')[['Dollars', 'PlayerId']], left_on='playerid', right_on='PlayerId', how='left')
+        proj = proj.merge(pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-fangraphs-auction-calculator-h.csv')[['Dollars', 'PlayerId']], left_on='playerid', right_on='PlayerId', how='left')
         proj.fillna({'Dollars':0, 'ADP':0},inplace=True)
         proj.drop(columns='PlayerId',inplace=True)
         proj = proj.sort_values('sorter', ascending=False)
@@ -287,7 +290,7 @@ class Fantasy_Projections():
         p = pd.DataFrame()
         for proj_file in self.proj_systems:
             try:
-                temp = pd.read_csv(f'data/{datetime.now().year}-{proj_file}-proj-p.csv', encoding="latin-1")
+                temp = pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-{proj_file}-proj-p.csv', encoding="latin-1")
                 temp.rename(columns={'SO':'K'},inplace=True)
                 temp['sys'] = proj_file
                 p = pd.concat([p, temp])
@@ -303,7 +306,7 @@ class Fantasy_Projections():
         p = p.merge(players[['cbsid', 'CBSNAME', 'IDFANGRAPHS']], left_on='playerid', right_on='IDFANGRAPHS', how='left').sort_values('IP', ascending=False)
 
         # Add in cbs projections
-        temp = pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year}-cbs-proj-p.csv')
+        temp = pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-cbs-proj-p.csv')
         temp['sys'] = 'cbs'
         temp.rename(columns={'Positions':'Pos', 'INNs':'IP', 'S':'SV', 'HD':'HLD'},inplace=True)
         temp['ER'] = temp['ERA']/9*temp['IP']
@@ -332,11 +335,11 @@ class Fantasy_Projections():
         proj['K-BB%'] = round(proj['K%']-proj['BB%'],4)
         proj['K/9'] = round(proj['SO']/proj['IP']*9,4)
         # Merge data with CBS auction values
-        cbs_auction_values = pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
+        cbs_auction_values = pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-cbs-auction-values.csv')[['cbsid', 'CBSNAME', 'CBS']]
         proj = proj.merge(cbs_auction_values[['cbsid', 'CBS']], on='cbsid', how='left')
         proj.fillna({'CBS':0},inplace=True)
         # Merge data with Fangraphs Auction Calculator values
-        proj = proj.merge(pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year}-fangraphs-auction-calculator-p.csv')[['Dollars', 'PlayerId']], left_on='playerid', right_on='PlayerId', how='left')
+        proj = proj.merge(pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-fangraphs-auction-calculator-p.csv')[['Dollars', 'PlayerId']], left_on='playerid', right_on='PlayerId', how='left')
         proj.fillna({'Dollars':0, 'ADP':0},inplace=True)
         proj.drop(columns='PlayerId',inplace=True)
         proj = proj.sort_values('sorter', ascending=False)
@@ -358,12 +361,12 @@ class Fantasy_Projections():
 
         # Merge with StatCast data if it exists
         try:
-            stat_cast = pd.read_csv(rf'C:\GitHub\xdl\data\{datetime.now().year-1}-statcast.csv')
+            stat_cast = pd.read_csv(rf'{self.data_dir}\{datetime.now().year-1}-statcast.csv')
             sc_ly = stat_cast[stat_cast['year']==datetime.now().year-1][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg', 'K/9', 'K-BB%', 'ff_avg_speed', 'fastball_avg_speed', 'fastball_avg_break_z_induced', 'whiff_percent', 'home_run', 'pa', 'r_total_stolen_base', 'r_run', 'b_rbi', 'batting_avg', 'p_quality_start', 'p_SvHld', 'p_strikeout', 'p_out', 'p_era', 'p_whip']]
             sc_ly.rename(columns={col:col+'_ly' for col in sc_ly.columns if col not in ['cbsid', 'MLBID', 'player_name', 'year']},inplace=True)
 
-            sc_2ly = stat_cast[stat_cast['year']==datetime.now().year-2][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg', 'K/9', 'K-BB%', 'ff_avg_speed', 'fastball_avg_speed', 'fastball_avg_break_z_induced', 'whiff_percent', 'home_run', 'pa', 'r_total_stolen_base', 'r_run', 'b_rbi', 'batting_avg', 'p_quality_start', 'p_SvHld', 'p_strikeout', 'p_out', 'p_era', 'p_whip']]
-            sc_2ly.rename(columns={col:col+'_2ly' for col in sc_2ly.columns if col not in ['cbsid', 'MLBID', 'player_name', 'year']},inplace=True)
+            sc_2ly = stat_cast[stat_cast['year']==datetime.now().year-2][['cbsid', 'MLBID', 'player_name', 'year', 'player_age', 'woba', 'xwoba', 'woba_diff', 'xba', 'barrel_batted_rate', 'sprint_speed', 'exit_velocity_avg' ,'K/9' ,'K-BB%', 	'ff_avg_speed' ,'fastball_avg_speed' ,'fastball_avg_break_z_induced' ,'whiff_percent' ,'home_run' ,'pa' ,'r_total_stolen_base' ,'r_run' ,'b_rbi' ,'batting_avg' ,'p_quality_start' ,'p_SvHld' ,'p_strikeout' ,'p_out' ,'p_era' ,'p_whip']]
+            sc_2ly.rename(columns={col:col+'_2ly' for col in sc_2ly.columns if col not in ['cbsid','MLBID','player_name','year']},inplace=True)
 
             proj.rename(columns={'PA_ly':'pa_ly_'},inplace=True)
             proj = proj.merge(sc_ly, on='cbsid', how='left').merge(sc_2ly, on='cbsid', how='left').drop_duplicates('cbsid')
