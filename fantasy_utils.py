@@ -83,7 +83,7 @@ class Fantasy_Projections():
             for stat in ['PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB']:
                 assert stat in previous_season_stats_hitter.columns
         else:
-            previous_season_stats_hitter = pd.read_csv('data/'+str(yr-1)+'-final-stats-h.csv', encoding='latin1')
+            previous_season_stats_hitter = pd.read_csv(rf'{self.data_dir}\{yr-1}-final-stats-h.csv', encoding='latin1')
             previous_season_stats_hitter['PA'] = previous_season_stats_hitter['AB']+previous_season_stats_hitter['BB']
             previous_season_stats_hitter = previous_season_stats_hitter.query('PA>0')
             previous_season_stats_hitter = previous_season_stats_hitter.sort_values('PA', ascending=False)
@@ -99,7 +99,7 @@ class Fantasy_Projections():
             for stat in ['BB', 'HA', 'ER', 'IP', 'SO', 'QS', 'SvHld']:
                 assert stat in previous_season_stats_pitcher.columns
         else:
-            previous_season_stats_pitcher = pd.read_csv('data/'+str(yr-1)+'-final-stats-p.csv', encoding='latin1')
+            previous_season_stats_pitcher = pd.read_csv(rf'{self.data_dir}\{yr-1}-final-stats-p.csv', encoding='latin1')
             previous_season_stats_pitcher.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'},inplace=True)
             previous_season_stats_pitcher = previous_season_stats_pitcher.query('IP>0')
             previous_season_stats_pitcher['SvHld'] = previous_season_stats_pitcher['SV']+previous_season_stats_pitcher['HLD']
@@ -187,8 +187,8 @@ class Fantasy_Projections():
         h = pd.DataFrame()
         for proj_file in self.proj_systems:
             try:
-                temp = pd.read_csv(f'data/{datetime.now().year}-{proj_file}-proj-h.csv', encoding="latin-1")
-                temp.rename(columns={'SO':'K'},inplace=True)
+                temp = pd.read_csv(rf'{self.data_dir}\{datetime.now().year}-{proj_file}-proj-h.csv', encoding="latin-1")
+                temp.rename(columns={'SO':'K', 'HP':'HBP', 'PlayerID':'playerid'},inplace=True)
                 if 'HBP' not in temp.columns:
                     temp['HBP'] = 0
                 temp['sys'] = proj_file
@@ -219,6 +219,7 @@ class Fantasy_Projections():
         h.drop(columns=['InterSD', 'InterSK', 'IntraSD'],inplace=True)
         # Compute TB
         h['TB'] = h['1B'] + (h['2B']*2) + (h['3B']*3) + (h['HR']*4)
+        h['PA'] = h['AB'] + h['BB'] + h['HBP'] + h['SF']
         # There are thousands of projections. I'm going to filter out players who are not projected to get at least 1 AB
         h = h[(h['AB']>1)]
         # If I ever want to save these and explore, can use this line
@@ -232,10 +233,13 @@ class Fantasy_Projections():
             .merge(h[['cbsid', 'playerid', 'Name', 'Team']], on='cbsid', how='inner').drop_duplicates('cbsid') # drop by cbsid b/c when this is the same, the data avgs for the entries are the same
         # Helps with sorting later when we need to find the top 12 players at a position.
         proj['sorter'] = proj['HR']+proj['R']+proj['RBI']+proj['H']+proj['SB']
-        
+        print(proj.columns)
         # Calculate some rate stats
         proj['BA'] = proj['H']/proj['AB']
-        proj['OBP'] = (proj['H']+proj['BB']+proj['HBP']) / (proj['AB']+proj['BB']+proj['HBP']+proj['SF'])
+        try:
+            proj['OBP'] = (proj['H']+proj['BB']+proj['HBP']) / (proj['AB']+proj['BB']+proj['HBP']+proj['SF'])
+        except:
+            proj['OBP'] = (proj['H']+proj['BB']) / (proj['AB']+proj['BB'])
         proj['SLG'] = proj['TB'] / proj['AB']
         proj['OPS'] = proj['OBP'] + proj['SLG']
         proj['K%'] = proj['K']/proj['PA']
@@ -255,7 +259,7 @@ class Fantasy_Projections():
         # Find primary position
         proj['Primary_Pos'] = proj['Pos'].apply(lambda x: self.find_primary_pos(x) if type(x) != float else x)
 
-        lyh = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-h.csv', encoding='latin1')
+        lyh = pd.read_csv(rf'{self.data_dir}\{self.yr-1}-final-stats-h.csv', encoding='latin1')
         for col in ['PA', 'AB', 'H', 'HR', 'R', 'RBI', 'SB', 'BB', 'K', 'AVG', 'HBP']:
             if col not in lyh.columns:
                 lyh[col] = 0
@@ -350,7 +354,7 @@ class Fantasy_Projections():
         proj.fillna({'Pos':'RP'},inplace=True)
         proj['Primary_Pos'] = proj['Pos'].apply(lambda x: 'SP' if 'SP' in x else 'RP')
 
-        lyp = pd.read_csv('data/'+str(self.yr-1)+'-final-stats-p.csv', encoding='latin1')
+        lyp = pd.read_csv(rf'{self.data_dir}\{self.yr-1}-final-stats-p.csv', encoding='latin1')
         for col in ['INNs', 'ER', 'HA', 'BB', 'SO', 'QS', 'SV', 'HLD']:
             if col not in lyp.columns:
                 lyp[col] = 0

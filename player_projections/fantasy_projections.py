@@ -134,9 +134,11 @@ class FantasyProjections:
         # Load previous season data if not provided
         if previous_hitting is None:
             previous_hitting = self.load_previous_season_stats('hitting')
+            self.previous_season_hitting = previous_hitting
         
         if previous_pitching is None:
             previous_pitching = self.load_previous_season_stats('pitching')
+            self.previous_season_pitching = previous_pitching
         
         # Calculate qualifier baselines
         self.qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
@@ -205,6 +207,7 @@ class FantasyProjections:
                 df = self.standardize_columns(df, 'hitting')
                 all_projections.append(df)
                 logger.info(f"Loaded {len(df)} hitting projections from {system}")
+                print(f"Loaded {len(df)} hitting projections from {system}")
             except Exception as e:
                 logger.warning(f"Could not load {system}: {e}")
         
@@ -720,8 +723,8 @@ class FantasyProjections:
         self,
         hitting: pd.DataFrame,
         pitching: pd.DataFrame,
-        hitting_percentile: float = 0.6,
-        pitching_percentile: float = 0.5
+        hitting_percentile: float = 0.65,
+        pitching_percentile: float = 0.65
     ) -> dict:
         """
         Calculate league qualifier averages dynamically.
@@ -776,17 +779,18 @@ class FantasyProjections:
                 
                 rp_cutoff = pitching[
                     (pitching['Primary_Pos'] == 'RP') & (pitching['IP'] > 0)
-                ]['IP'].quantile(pitching_percentile / 2)  # Lower bar for relievers
+                ]['IP'].quantile(pitching_percentile)  # Lower bar for relievers
                 
                 qual_pitchers = pitching[
                     ((pitching['Primary_Pos'] == 'SP') & (pitching['IP'] >= sp_cutoff)) |
-                    ((pitching['Primary_Pos'] == 'RP') & (pitching['IP'] >= rp_cutoff) & (pitching.get('SvHld', 0) > 5))
+                    ((pitching['Primary_Pos'] == 'RP') & (pitching['IP'].between(45,95)) & (pitching.get('SvHld', 0) > 5))
                 ].copy()
             else:
                 ip_cutoff = pitching[pitching['IP'] > 0]['IP'].quantile(pitching_percentile)
                 qual_pitchers = pitching[pitching['IP'] >= ip_cutoff].copy()
             
             logger.info(f"Found {len(qual_pitchers)} qualifying pitchers")
+            print(f"Found {len(qual_pitchers)} qualifying pitchers")
             
             # Calculate league ERA and WHIP
             lg_era = (qual_pitchers['ER'].sum() / qual_pitchers['IP'].sum()) * 9
@@ -1037,7 +1041,7 @@ class FantasyProjections:
             
             if len(eligible) < num_drafted:
                 logger.warning(
-                    f"Only {len(eligible)} {pos} players available, need {num_drafted}"
+                    f"Only {len(eligible)} {pos} players available, need {num_drafted}"                        
                 )
                 num_drafted = len(eligible)
             
@@ -1046,7 +1050,7 @@ class FantasyProjections:
             replacement_z = eligible_sorted.iloc[num_drafted - 1]['total_z']
             
             # Adjustment is the abs value of replacement level
-            adjustments[pos] = abs(replacement_z)
+            adjustments[pos] = replacement_z * -1
             
             logger.debug(f"{pos}: {num_drafted} drafted, replacement z={replacement_z:.2f}")
             print(f"{pos}: {num_drafted} drafted, replacement z={replacement_z:.2f}, adjustment={adjustments[pos]:.2f}")
