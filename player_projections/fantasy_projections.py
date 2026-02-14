@@ -82,7 +82,7 @@ class FantasyProjections:
         self.hitting_projections = None
         self.pitching_projections = None
         self.qualifiers = None
-        self.final_values = None
+        self.draft_values = None
         
         # Column name variations we know about
         self.column_mappings = {
@@ -169,6 +169,8 @@ class FantasyProjections:
             pitching_adj,
             z_column='z'  # Use adjusted z-scores
         )
+
+        self.draft_values = draft_values  # Save for later reference
         
         # Save conversion factor for later reference
         self.draft_conversion_factor = self._last_conversion_factor
@@ -1396,7 +1398,7 @@ class FantasyProjections:
     
     def save_to_database(
         self, 
-        table_name: str = 'projections',
+        table_name: str = 'players',
         db_path: Optional[str] = None
     ):
         """
@@ -1406,7 +1408,7 @@ class FantasyProjections:
             table_name: Name of table to create
             db_path: Path to database (defaults to data_dir/fantasy_data.db)
         """
-        if self.final_values is None:
+        if self.draft_values is None:
             raise ValueError("No data to save. Run generate_auction_values() first.")
         
         if db_path is None:
@@ -1414,14 +1416,14 @@ class FantasyProjections:
         
         engine = create_engine(f'sqlite:///{db_path}')
         
-        self.final_values.to_sql(
+        self.draft_values.to_sql(
             f'{table_name}{self.year}',
             engine,
             if_exists='replace',
             index=False
         )
         
-        logger.info(f"Saved {len(self.final_values)} rows to {table_name}{self.year}")
+        logger.info(f"Saved {len(self.draft_values)} rows to {table_name}{self.year}")
     
     def get_top_players(self, n: int = 20, position: Optional[str] = None) -> pd.DataFrame:
         """
@@ -1434,10 +1436,10 @@ class FantasyProjections:
         Returns:
             DataFrame with top players
         """
-        if self.final_values is None:
+        if self.draft_values is None:
             raise ValueError("No data available. Run generate_auction_values() first.")
         
-        df = self.final_values
+        df = self.draft_values
         
         if position:
             df = df[df['Pos'].str.contains(position, na=False)]
