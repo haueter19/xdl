@@ -55,26 +55,4 @@ class Optimized_Lineups:
         base_12 = list(set(list(position_combos[max_z_idx][0:-1])+list(position_combos[max_z_idx][-1])))
         self.hitter_optimized_lineup = list(position_combos[max_z_idx][0:-1])+list(position_combos[max_z_idx][-1])+[i for i in self.h_dict.keys() if i not in base_12][:2]
         self.hitter_optimized_z = self.data[self.data['Player'].isin(self.hitter_optimized_lineup)][self.optimize_col].sum()
-        #_list = []
-        #for num in range(len(inf)):
-        #    _list.append([item for item in inf[num] if type(item)!=tuple]+[item for sublist in inf[num] for item in sublist if type(sublist)==tuple])
-        
-        #del(inf)
-        #_list2 = [i for i in _list if len(set(i))==12]
-        #del(_list)
-        #inf2 = [i for i in product(_list2, self.dh2)]
-        
-        #del(_list2)
-        #_list3 = []
-        #for num in range(len(inf2)):
-            #_list3.append([list(i) for i in inf2[num] if type(i)!=tuple][0]+[list(i) for i in inf2[num] if type(i)==tuple][0])
-        #del(inf2)
-
-        #self.hitter_combos = [i for i in _list3 if len(set(i))==self.num_hitter_positions]
-        #print(len(self.hitter_combos))
-        #self.hitter_z_list = self._z_list(self.hitter_combos, self.h_dict)
-        #print(len(self.hitter_z_list))
-        #self.hitter_idx = np.nanargmax(self.hitter_z_list)
-        #self.hitter_optimized_z = self.hitter_z_list[self.hitter_idx]
-        #self.hitter_optimized_lineup = self.hitter_combos[self.hitter_idx]
         return    
