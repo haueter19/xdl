@@ -29,7 +29,7 @@ class Optimized_Lineups:
         ('CI',  ['1B', '3B']),
         ('OF1', ['OF']), ('OF2', ['OF']), ('OF3', ['OF']),
         ('OF4', ['OF']), ('OF5', ['OF']),
-        ('DH1', ['DH']), ('DH2', ['DH']),
+        ('DH1', []), ('DH2', []),  # any hitter is DH-eligible
     ]
 
     def __init__(self, owner, data, optimize_col='z'):
@@ -77,7 +77,12 @@ class Optimized_Lineups:
 
     @staticmethod
     def _is_eligible(all_pos: list, positions: list) -> bool:
-        """Return True if any of *positions* appears in the player's all_pos list."""
+        """Return True if the player is eligible for a slot.
+
+        An empty positions list means the slot is unrestricted (e.g. DH).
+        """
+        if not positions:
+            return True
         return any(pos in all_pos for pos in positions)
 
     # ------------------------------------------------------------------
