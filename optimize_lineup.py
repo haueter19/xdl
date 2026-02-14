@@ -1,3 +1,5 @@
+import ast
+import warnings
 from pulp import LpProblem, LpMaximize, LpVariable, lpSum, value, PULP_CBC_CMD
 
 
@@ -40,6 +42,10 @@ class Optimized_Lineups:
             .set_index('Player')
             .to_dict(orient='index')
         )
+        # Normalise all_pos to a list regardless of how it was stored/retrieved
+        for v in self.d.values():
+            v['all_pos'] = self._parse_all_pos(v['all_pos'])
+
         self.p_dict = {k: v for k, v in self.d.items() if 'p' in v['type']}
         self.h_dict = {k: v for k, v in self.d.items() if 'h' in v['type']}
 
@@ -48,21 +54,31 @@ class Optimized_Lineups:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _is_eligible(all_pos: str, positions: list) -> bool:
+    def _parse_all_pos(val) -> list:
         """
-        Return True if all_pos satisfies at least one position token.
+        Normalise all_pos to a plain Python list regardless of how it arrived.
 
-        'C' requires a special check because 'C' is a substring of 'CI'.
-        We look for "C'" (C followed by a closing quote) which appears in
-        "'C'" but not in "'CI'".
+        Handles three formats seen across the codebase:
+          - Already a list:       ['C', '1B', 'DH']
+          - Python repr string:   "['C', '1B', 'DH']"
+          - Comma-separated str:  "C,1B,DH"
         """
-        for pos in positions:
-            if pos == 'C':
-                if "C'" in all_pos:
-                    return True
-            elif pos in all_pos:
-                return True
-        return False
+        if isinstance(val, list):
+            return val
+        if isinstance(val, str):
+            val = val.strip()
+            if val.startswith('['):
+                try:
+                    return ast.literal_eval(val)
+                except (ValueError, SyntaxError):
+                    pass
+            return [p.strip() for p in val.split(',') if p.strip()]
+        return []
+
+    @staticmethod
+    def _is_eligible(all_pos: list, positions: list) -> bool:
+        """Return True if any of *positions* appears in the player's all_pos list."""
+        return any(pos in all_pos for pos in positions)
 
     # ------------------------------------------------------------------
     # ILP solver
@@ -128,6 +144,20 @@ class Optimized_Lineups:
                     break
         return assignment
 
+    def _warn_infeasible(self, group: str, player_dict: dict, slots: list):
+        """Emit a warning listing which slots have no eligible player."""
+        empty_slots = [
+            s for s, eligible_pos in slots
+            if not any(
+                self._is_eligible(player_dict[p]['all_pos'], eligible_pos)
+                for p in player_dict
+            )
+        ]
+        msg = f"Optimized_Lineups: no feasible {group} lineup for '{self.owner}'."
+        if empty_slots:
+            msg += f" Slots with no eligible player: {empty_slots}"
+        warnings.warn(msg)
+
     # ------------------------------------------------------------------
     # Public optimisation methods
     # ------------------------------------------------------------------
@@ -160,6 +190,7 @@ class Optimized_Lineups:
         """
         assignment = self._solve_ilp(self.h_dict, self.HITTER_SLOTS)
         if assignment is None:
+            self._warn_infeasible('hitter', self.h_dict, self.HITTER_SLOTS)
             self.hitter_optimized_lineup = []
             self.hitter_optimized_z = 0
             return
