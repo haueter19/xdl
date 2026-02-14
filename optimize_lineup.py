@@ -1,6 +1,6 @@
 import ast
 import warnings
-from pulp import LpProblem, LpMaximize, LpVariable, lpSum, value, PULP_CBC_CMD
+from pulp import LpProblem, LpMaximize, LpVariable, LpStatus, lpSum, value, PULP_CBC_CMD
 
 
 class Optimized_Lineups:
@@ -84,18 +84,19 @@ class Optimized_Lineups:
     # ILP solver
     # ------------------------------------------------------------------
 
-    def _solve_ilp(self, player_dict: dict, slots: list) -> dict | None:
+    def _solve_ilp(self, player_dict: dict, slots: list) -> tuple[dict, int] | tuple[None, int]:
         """
         Assign players to slots maximising the optimize_col score.
 
         Parameters
         ----------
-        player_dict : {player_name: {'all_pos': str, optimize_col: float, ...}}
+        player_dict : {player_name: {'all_pos': list, optimize_col: float, ...}}
         slots       : [(slot_name, [eligible_position_tokens]), ...]
 
         Returns
         -------
-        {slot_name: player_name} on success, None if infeasible.
+        (assignment, status) where assignment is {slot_name: player_name}
+        on success, or (None, status) if the problem is infeasible/unsolved.
         """
         players = list(player_dict.keys())
         slot_names = [s for s, _ in slots]
@@ -134,7 +135,7 @@ class Optimized_Lineups:
         prob.solve(PULP_CBC_CMD(msg=0))
 
         if prob.status != 1:   # 1 = Optimal
-            return None
+            return None, prob.status
 
         assignment = {}
         for s in slot_names:
@@ -142,21 +143,26 @@ class Optimized_Lineups:
                 if value(x[i][s]) is not None and value(x[i][s]) > 0.5:
                     assignment[s] = player
                     break
-        return assignment
+        return assignment, prob.status
 
-    def _warn_infeasible(self, group: str, player_dict: dict, slots: list):
-        """Emit a warning listing which slots have no eligible player."""
-        empty_slots = [
-            s for s, eligible_pos in slots
-            if not any(
-                self._is_eligible(player_dict[p]['all_pos'], eligible_pos)
-                for p in player_dict
-            )
+    def _warn_infeasible(self, group: str, player_dict: dict, slots: list, solver_status: int):
+        """Warn with a per-slot eligibility breakdown to aid debugging."""
+        status_name = LpStatus.get(solver_status, str(solver_status))
+
+        lines = [
+            f"Optimized_Lineups: no feasible {group} lineup for '{self.owner}' "
+            f"(solver status: {status_name}).",
+            "Eligible players per slot:",
         ]
-        msg = f"Optimized_Lineups: no feasible {group} lineup for '{self.owner}'."
-        if empty_slots:
-            msg += f" Slots with no eligible player: {empty_slots}"
-        warnings.warn(msg)
+        for s, eligible_pos in slots:
+            eligible = [
+                p for p in player_dict
+                if self._is_eligible(player_dict[p]['all_pos'], eligible_pos)
+            ]
+            flag = " *** NO ELIGIBLE PLAYERS ***" if not eligible else ""
+            lines.append(f"  {s:>4} {eligible_pos}: {eligible}{flag}")
+
+        warnings.warn("\n".join(lines))
 
     # ------------------------------------------------------------------
     # Public optimisation methods
@@ -188,9 +194,9 @@ class Optimized_Lineups:
         (C, 1B, 2B, 3B, SS, MI, CI, OF×5, DH×2) that maximises the
         total score, respecting all position-eligibility constraints.
         """
-        assignment = self._solve_ilp(self.h_dict, self.HITTER_SLOTS)
+        assignment, status = self._solve_ilp(self.h_dict, self.HITTER_SLOTS)
         if assignment is None:
-            self._warn_infeasible('hitter', self.h_dict, self.HITTER_SLOTS)
+            self._warn_infeasible('hitter', self.h_dict, self.HITTER_SLOTS, status)
             self.hitter_optimized_lineup = []
             self.hitter_optimized_z = 0
             return
