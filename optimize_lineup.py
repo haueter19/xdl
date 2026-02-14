@@ -3,6 +3,9 @@ import numpy as np
 
 
 class Optimized_Lineups:
+    """
+    Optimize a fantasy baseball lineup for a given owner and player data. 
+    """
     def __init__(self, owner, data, optimize_col='z'):
         self.owner = owner
         self.optimize_col = optimize_col
