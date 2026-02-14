@@ -75,7 +75,7 @@ class FantasyProjections:
         self.proj_systems = ['cbs', 'atc', 'thebatx', 'oopsy', 'fangraphsdc', 'steamer', 'zips']
 
         # Position hierarchy (for determining primary position)
-        self.position_hierarchy = ['C', '2B', '3B', 'SS', 'OF', '1B', 'DH', 'SP', 'RP', 'P']
+        self.position_hierarchy = ['C', '3B', '2B', 'OF', 'SS', '1B', 'DH', 'SP', 'RP', 'P']
         
         # Data storage
         self.player_index = None
@@ -104,6 +104,10 @@ class FantasyProjections:
     # Main Workflow Methods
     # ========================================================================
     
+    # ========================================================================
+    # MODE 1: PRE-SEASON DRAFT PREPARATION
+    # ========================================================================
+    
     def generate_auction_values(
         self,
         previous_hitting: Optional[pd.DataFrame] = None,
@@ -111,52 +115,205 @@ class FantasyProjections:
         force_reload: bool = False
     ) -> pd.DataFrame:
         """
-        Main workflow: Load projections, calculate z-scores, generate values.
+        MODE 1: Pre-season draft preparation.
+        
+        Generates auction values for upcoming season using:
+        - Current year projections as input
+        - Previous year stats as baseline/qualifiers
+        - Positional adjustments applied
         
         Args:
-            previous_hitting: Previous season hitting stats (loads from file if None)
-            previous_pitching: Previous season pitching stats (loads from file if None)
+            previous_hitting: Previous season hitting stats (for qualifiers)
+            previous_pitching: Previous season pitching stats (for qualifiers)
             force_reload: Force reload of projection data
             
         Returns:
-            DataFrame with all players and their auction values
+            DataFrame with auction values for draft
         """
-        logger.info("Starting auction value generation...")
-        print("Starting auction value generation...")
-        
+        logger.info("=" * 60)
+        logger.info("MODE 1: GENERATING AUCTION VALUES (DRAFT PREP)")
+        logger.info("=" * 60)
+        print("=" * 60)
+        print("MODE 1: GENERATING AUCTION VALUES (DRAFT PREP)")
+        print("=" * 60)
+
         # Load projection data
-        if self.hitting_projections is None or force_reload:
-            self.hitting_projections = self.load_hitting_projections()
-        
-        if self.pitching_projections is None or force_reload:
-            self.pitching_projections = self.load_pitching_projections()
+        hitting_proj = self.load_hitting_projections()
+        pitching_proj = self.load_pitching_projections()
         
         # Load previous season data if not provided
         if previous_hitting is None:
             previous_hitting = self.load_previous_season_stats('hitting')
-            self.previous_season_hitting = previous_hitting
-        
         if previous_pitching is None:
             previous_pitching = self.load_previous_season_stats('pitching')
-            self.previous_season_pitching = previous_pitching
         
-        # Calculate qualifier baselines
-        self.qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
+        # Calculate qualifiers from PREVIOUS season
+        qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
+        self.draft_qualifiers = qualifiers  # Save for later comparison
+        self.qualifiers = qualifiers  # Set for calculate_z_scores()
+
+        logger.info(f"Calculated qualifiers from {self.year - 1} season")
+        print(f"Calculated qualifiers from {self.year - 1} season")
         
         # Calculate z-scores
-        hitting_z = self.calculate_z_scores(self.hitting_projections, 'hitting')
-        pitching_z = self.calculate_z_scores(self.pitching_projections, 'pitching')
+        hitting_z = self.calculate_z_scores(hitting_proj, 'hitting')
+        pitching_z = self.calculate_z_scores(pitching_proj, 'pitching')
         
         # Apply positional adjustments
         hitting_adj = self.apply_positional_adjustments(hitting_z, 'hitting')
         pitching_adj = self.apply_positional_adjustments(pitching_z, 'pitching')
         
         # Convert to auction values
-        self.final_values = self.calculate_auction_values(hitting_adj, pitching_adj)
+        draft_values = self._convert_to_dollars(
+            hitting_adj, 
+            pitching_adj,
+            z_column='z'  # Use adjusted z-scores
+        )
         
-        logger.info(f"Generated values for {len(self.final_values)} players")
-        print(f"Generated values for {len(self.final_values)} players")
-        return self.final_values
+        # Save conversion factor for later reference
+        self.draft_conversion_factor = self._last_conversion_factor
+        
+        logger.info(f"Draft conversion factor: ${self.draft_conversion_factor:.2f}/z")
+        logger.info("=" * 60)
+        print(f"Draft conversion factor: ${self.draft_conversion_factor:.2f}/z")
+        print("=" * 60)
+        
+        return draft_values
+    
+    # ========================================================================
+    # MODE 2: POST-SEASON RETROSPECTIVE
+    # ========================================================================
+    
+    def evaluate_season_performance(
+        self,
+        actual_hitting: pd.DataFrame,
+        actual_pitching: pd.DataFrame,
+        normalize_to_budget: bool = True
+    ) -> pd.DataFrame:
+        """
+        MODE 2: Post-season full year retrospective.
+        
+        Evaluates actual season performance using:
+        - Actual season stats as input
+        - SAME previous year baseline as draft (for comparison)
+        - NO positional adjustments (measuring absolute performance)
+        - Normalized to league budget for comparability
+        
+        Args:
+            actual_hitting: Actual season hitting stats
+            actual_pitching: Actual season pitching stats
+            normalize_to_budget: Scale to league budget (recommended: True)
+            
+        Returns:
+            DataFrame with actual season values (comparable to draft values)
+        """
+        logger.info("=" * 60)
+        logger.info("MODE 2: EVALUATING SEASON PERFORMANCE")
+        logger.info("=" * 60)
+        print("=" * 60)
+        print("MODE 2: EVALUATING SEASON PERFORMANCE")
+        print("=" * 60)
+
+        if self.draft_qualifiers is None:
+            raise ValueError(
+                "Must run generate_auction_values() first to establish baseline. "
+                "Or manually set self.draft_qualifiers."
+            )
+        
+        # Use SAME qualifiers as draft (previous season)
+        self.qualifiers = self.draft_qualifiers
+        logger.info(f"Using {self.year - 1} season as baseline (same as draft)")
+        print(f"Using {self.year - 1} season as baseline (same as draft)")
+        
+        # Calculate z-scores (NO positional adjustment)
+        hitting_z = self.calculate_z_scores(actual_hitting, 'hitting')
+        pitching_z = self.calculate_z_scores(actual_pitching, 'pitching')
+        
+        # Convert to dollars
+        season_values = self._convert_to_dollars(
+            hitting_z,
+            pitching_z,
+            z_column='total_z',  # Use unadjusted z-scores
+            normalize_to_budget=normalize_to_budget
+        )
+        
+        logger.info(f"Season conversion factor: ${self._last_conversion_factor:.2f}/z")
+        logger.info(f"Draft conversion factor was: ${self.draft_conversion_factor:.2f}/z")
+        logger.info("=" * 60)
+        
+        return season_values
+    
+    # ========================================================================
+    # MODE 3: PERIOD PERFORMANCE (WEEKLY, MONTHLY, ETC)
+    # ========================================================================
+    
+    def evaluate_period_performance(
+        self,
+        period_hitting: pd.DataFrame,
+        period_pitching: pd.DataFrame,
+        period_name: Optional[str] = None
+    ) -> pd.DataFrame:
+        """
+        MODE 3: Period-based performance evaluation.
+        
+        Evaluates any time period (week, month, date range) using:
+        - That period's stats as BOTH input AND baseline
+        - All MLB players as comparison pool
+        - NO positional adjustments
+        - Dollar values represent "if sustained for full season"
+        
+        Args:
+            period_hitting: Period hitting stats (Week 12, June, etc.)
+            period_pitching: Period pitching stats
+            period_name: Descriptive name (e.g., "Week 12", "June 2025")
+            
+        Returns:
+            DataFrame with period values
+        """
+        logger.info("=" * 60)
+        logger.info(f"MODE 3: EVALUATING PERIOD PERFORMANCE - {period_name or 'Custom Period'}")
+        logger.info("=" * 60)
+        print("=" * 60)
+        print(f"MODE 3: EVALUATING PERIOD PERFORMANCE - {period_name or 'Custom Period'}")
+        print("=" * 60)
+        
+        # Calculate qualifiers from THIS period's data
+        # Use very lenient thresholds - include anyone who played
+        period_qualifiers = self.calculate_qualifiers(
+            period_hitting,
+            period_pitching,
+            min_pa=1,  # Anyone with a plate appearance
+            min_ip=0.1,  # Anyone who pitched
+            hitting_percentile=0.0,  # Don't filter by percentile
+            pitching_percentile=0.0,
+            sp_min_ip=1,  # Very low threshold for period data
+            rp_ip_range=[0.1, 999]  # Essentially no filter
+        )
+        
+        logger.info(f"Using {period_name or 'this period'} as its own baseline")
+        
+        # Set as current qualifiers
+        period_qualifiers = self.calculate_qualifiers(...)
+        self.qualifiers = period_qualifiers  # Set for calculate_z_scores()
+        
+        # Calculate z-scores (NO positional adjustment)
+        hitting_z = self.calculate_z_scores(period_hitting, 'hitting')
+        pitching_z = self.calculate_z_scores(period_pitching, 'pitching')
+        
+        # Convert to dollars
+        period_values = self._convert_to_dollars(
+            hitting_z,
+            pitching_z,
+            z_column='total_z',  # Use unadjusted z-scores
+            normalize_to_budget=True
+        )
+        
+        logger.info(f"Period conversion factor: ${self._last_conversion_factor:.2f}/z")
+        logger.info("=" * 60)
+        print(f"Period conversion factor: ${self._last_conversion_factor:.2f}/z")
+        print("=" * 60)
+        
+        return period_values
     
     # ========================================================================
     # Data Loading Methods
@@ -723,6 +880,11 @@ class FantasyProjections:
         self,
         hitting: pd.DataFrame,
         pitching: pd.DataFrame,
+        min_pa: int = 440,
+        min_ip: float = 130,
+        sp_min_ip: float = 130,
+        rp_ip_range: list = [45, 95],
+        min_sv_hld: int = 5,
         hitting_percentile: float = 0.65,
         pitching_percentile: float = 0.65
     ) -> dict:
@@ -1030,7 +1192,7 @@ class FantasyProjections:
         
         for pos in positions:
             # Find players eligible at this position
-            eligible = df[df['Pos'].str.contains(pos, na=False)].copy()
+            eligible = df[df['Primary_Pos'] == pos].copy()
             
             if len(eligible) == 0:
                 adjustments[pos] = 0
@@ -1120,6 +1282,67 @@ class FantasyProjections:
         #combined['Value'] = combined['Value'].clip(lower=0)
         
         # Round to nearest dollar
+        combined['Value'] = combined['Value'].round(1).astype(float)
+        
+        # Sort by value
+        combined = combined.sort_values('Value', ascending=False)
+        
+        return combined
+    
+
+    # ========================================================================
+    # SHARED CALCULATION METHODS
+    # ========================================================================
+    
+    def _convert_to_dollars(
+        self,
+        hitting: pd.DataFrame,
+        pitching: pd.DataFrame,
+        z_column: str = 'z',
+        normalize_to_budget: bool = True
+    ) -> pd.DataFrame:
+        """
+        Convert z-scores to dollar values.
+        
+        Args:
+            hitting: Hitting DataFrame with z-scores
+            pitching: Pitching DataFrame with z-scores
+            z_column: Which z-score column to use ('z' or 'total_z')
+            normalize_to_budget: Scale to league budget
+            
+        Returns:
+            Combined DataFrame with dollar values
+        """
+        # Calculate total positive z-scores
+        total_positive_z = (
+            hitting[hitting[z_column] > 0][z_column].sum() +
+            pitching[pitching[z_column] > 0][z_column].sum()
+        )
+        
+        # Calculate conversion factor
+        if normalize_to_budget:
+            conversion_factor = (
+                (self.budget_per_team / self.roster_size) *
+                (self.total_players / total_positive_z)
+            )
+        else:
+            # Use draft conversion factor if available
+            conversion_factor = self.draft_conversion_factor or 5.0
+        
+        # Store for reference
+        self._last_conversion_factor = conversion_factor
+        
+        logger.info(f"Total positive z-scores: {total_positive_z:.1f}")
+        logger.info(f"Conversion factor: ${conversion_factor:.2f} per z-score")
+        
+        # Calculate values
+        hitting['Value'] = hitting[z_column] * conversion_factor
+        pitching['Value'] = pitching[z_column] * conversion_factor
+        
+        # Combine
+        combined = pd.concat([hitting, pitching], ignore_index=True)
+        
+        # Round values
         combined['Value'] = combined['Value'].round(1).astype(float)
         
         # Sort by value
