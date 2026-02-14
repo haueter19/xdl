@@ -205,7 +205,7 @@ async def slash_route():
 
 @app.get("/draft")
 async def draft_view(request: Request, status: Optional[str] = 'ok'):
-    h = pd.read_sql('players'+str(datetime.now().year), engine)
+    h = pd.read_sql('players'+str(datetime.now().year-1), engine)
     h['cbsid'] = h['cbsid'].astype(int)
     h.loc[h['Primary_Pos'].isin(['C', '1B', '2B', '3B', 'OF', 'DH', 'SS']), 'PosClass'] = 'h'
     h.fillna({'PosClass':'p'}, inplace=True)
