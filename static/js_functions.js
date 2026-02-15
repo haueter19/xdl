@@ -331,6 +331,8 @@ function bid_amounts(id){
     }
 }
 
+var lastBidResult = null;
+
 $(document).ready(function(){
     if (redirectStatus =='unrosterable'){
         alert('Unable to roster last drafted player')
@@ -378,16 +380,13 @@ $(document).ready(function(){
             $("#sims").html(values.join(''));
         });
         
-        // new and experimental
-        console.log(selected)
+        // Simulate auction bids
         pdata = 0
         $.each(data, function(k,v){
             if (v['cbsid']==selected){
                 pdata = k
             }
         })
-        //console.log(data[pdata]['Name'])
-        //console.log('owners:',owners)
         jsonData = {'owners':owners, 'player_data':data[pdata], 'roster':roster}
 
         $.ajax({
@@ -396,17 +395,13 @@ $(document).ready(function(){
             data: JSON.stringify(jsonData),
             contentType: 'application/json',
             success: function(response) {
-                console.log(`server response: ${response}`);
-                var maxIndex = response.indexOf(Math.max(...response));
-                //console.log('maxIndex:',maxIndex)
-                //console.log('winning bid amount:',response[maxIndex])
-                //console.log('owners:',owners)
-                //console.log(owner_list[maxIndex])
-                //console.log(owners[maxIndex]['Owner'], response[maxIndex])
-                $("#bidWinner").text(owner_list[maxIndex]+' '+response[maxIndex])
+                lastBidResult = response;
+                $("#bidWinner").html(
+                    '<strong>' + response.winner + '</strong> $' + response.price
+                    + ' <span class="text-muted-custom">(would pay up to $' + response.max_willingness + ')</span>'
+                );
             }
         });
-        // end new
 
     });
 
@@ -445,13 +440,15 @@ $(document).ready(function(){
     })
     
     $("#acceptAuctionBid").click(function(){
+        if (!lastBidResult) {
+            alert('No auction result to accept');
+            return;
+        }
         var cbsid = $("#player_select").val();
-        bidWinnerText = $("#bidWinner").text();
-        arr = bidWinnerText.split(' ')
-        price = arr.slice(-1)
-        team = arr.slice(0,-1).join(' ')
+        var team = lastBidResult.winner;
+        var price = lastBidResult.price;
         url = `/draft/update_bid?cbsid=${cbsid}&owner=${team}&price=${price}&supp=0`;
-        window.location = url
+        window.location = url;
     })
 
     $("#button").click(function(){

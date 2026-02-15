@@ -335,16 +335,24 @@ async def get_bids(request: Request):
     roster = pd.DataFrame(data['roster'])
     roster['Pos'] = opt_pos
     o = pd.DataFrame(data['owners']).T.set_index('Owner').reindex(owner_list)
-    #o.rename(columns={'Owner':'owner'}, inplace=True)
-    o.fillna({'$ Left':260, 'Max Bid':237, 'Drafted':0},inplace=True)
-    #print(o.columns)
-    #o = o..reindex(owner_list)
-    o.fillna({'$ Left':260, 'Max Bid':237, 'Drafted':0, '$ Left/Plyr':11.3},inplace=True)
+    o.fillna({'$ Left':260, 'max_bid':237, 'Drafted':0, '$ Left/Plyr':11.3}, inplace=True)
     o['$ Left'] = o['$ Left'].astype(int)
-    #player_data = pd.read_sql(f"SELECT * FROM players{datetime.now().year} WHERE cbsid={cbsid}", engine).set_index('cbsid').to_dict(orient='index')
-    print(data['player_data'])
-    bids = fu.simulate_auction(data['player_data'], o.to_dict(orient='index'), roster.set_index('Pos'), .4)
-    return bids #{'post':data, 'bids':bids}
+
+    bids = fu.simulate_auction(data['player_data'], o.to_dict(orient='index'), roster.set_index('Pos'), .3)
+
+    # Resolve auction: ascending $1-increment → winner pays second-highest + 1
+    indexed_bids = sorted(enumerate(bids), key=lambda x: x[1], reverse=True)
+    winner_idx = indexed_bids[0][0]
+    winner_max = indexed_bids[0][1]
+    second_max = indexed_bids[1][1] if len(indexed_bids) > 1 else 0
+    price = min(second_max + 1, winner_max) if second_max > 0 else 1
+
+    return {
+        'winner': owner_list[winner_idx],
+        'price': int(price),
+        'max_willingness': int(winner_max),
+        'bids': dict(zip(owner_list, bids)),
+    }
 
 
 

@@ -523,84 +523,73 @@ def calculate_max_bid(player_value):
     """
     Dynamically calculate the max bid factor based on the player's value.
     """
+    if player_value <= 0:
+        return 1
     if player_value > 45:
         return 1.1 * player_value
-    else:
-        return max_bid_mult.get(player_value) * player_value
-    
+    return max_bid_mult.get(player_value, 1.1) * player_value
 
 
-def simulate_auction(player_data, owners_dict, rosters, timidness=0.1, nominating_team=None):
+def simulate_auction(player_data, owners_dict, rosters, timidness=0.3):
     """
-    Simulate an auction draft where teams bid on a player.
-    
+    Simulate an auction by generating each team's max willingness to pay.
+
+    Each team's bid is the player's value adjusted by the team's cash position
+    plus random noise (normal distribution scaled by timidness). Teams without
+    a roster spot or sufficient budget bid 0.
+
     Parameters:
-    - player_value: Estimated value of the player.
-    - owners: dict of owners
-    - team_budgets: List of budgets for each team.
-    - max_bid_factor: Maximum bid as a multiple of the player's value.
-    - timidness: Higher values make teams more timid about bidding as bids increase.
-    
+        player_data: dict with at least 'CBS', 'Dollars', 'Value', 'Pos'
+        owners_dict: dict keyed by team name with budget/roster info
+        rosters: DataFrame with Pos index and team columns (names = filled, else empty)
+        timidness: float, controls bid variance (higher = wider spread)
+
     Returns:
-    - A list of bids (0 means no bid) for each team.
+        list of int bids, one per team in owners_dict order
     """
-    player_value = int(max(player_data['CBS'], player_data['Dollars']))
-    pos_elig = {
-        'C':['C', 'DH1', 'DH2'],
-        '1B':['1B', 'CI', 'DH1', 'DH2'],
-        '2B':['2B', 'MI', 'DH1', 'DH2'],
-        '3B':['3B', 'CI', 'DH1', 'DH2'],
-        'SS':['SS', 'MI', 'DH1', 'DH2'],
-        'OF':['OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2'],
-        'DH':['DH1', 'DH2'],
-        'SP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
-        'RP':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'],
-        'P':['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9']
-    }
+    player_value = max(1, int(max(
+        player_data.get('CBS', 0) or 0,
+        player_data.get('Dollars', 0) or 0,
+    )))
+    ceiling = calculate_max_bid(player_value)
+
+    # Build eligible roster positions for this player
     elig_list = []
     for pos in player_data['Pos'].split(','):
-        elig_list.extend(pos_elig[pos])
+        elig_list.extend(pos_elig.get(pos, []))
     elig_list = list(set(elig_list))
-    max_bid = calculate_max_bid(player_value)
+
     bids = []
+    for team, info in owners_dict.items():
+        # Check if team has an open roster spot for this player
+        has_spot = rosters.map(
+            lambda x: 0 if isinstance(x, str) and any(c.isalpha() for c in str(x)) else 1
+        ).loc[elig_list, team].sum() > 0
 
-    for k,v in owners_dict.items():
-        # Checks to see if the team has one of the player's positions available
-        if rosters.map(lambda x: 0 if isinstance(x, str) and any(char.isalpha() for char in x) else 1).loc[elig_list, k].sum() <= 0:
-            print(f"{k} ineligible to bid on player")
+        if not has_spot:
             bids.append(0)
-        else:
-            # Set budget and team's max bid as constraints
-            budget = v['$ Left']
-            team_max_bid = 260 if pd.isnull(v['max_bid']) else math.floor(v['max_bid'])
-            print(k, budget, team_max_bid)
+            continue
 
-            # Probability of bidding decreases as the bid approaches max_bid
-            bid_probability = max(0.1, 1 - timidness * (max_bid / player_value - 1))
-            if np.random.random() > bid_probability or team_max_bid < player_value * 0.5:
-                # Skip bidding due to budget or preference
-                # Skip bidding due to budget or preference
-                if k == nominating_team:
-                    bids.append(1)
-                else:
-                    bids.append(0)
-            else:
-                # Generate a bid with some randomness
-                # Do not allow a bid higher than team's max bid
-                #bid = np.random.uniform(player_value * 0.8, min(team_max_bid, max_bid))
-                pmf = poisson.pmf(np.arange(0, 50), 5)
-                bid = np.random.choice(np.arange(len(pmf)), size=1, p=pmf)
-                bid = min((player_value - 8) + bid, max_bid)
-                bids.append(min(bid, budget))  # Respect team budgets
-                # Make sure bids don't go under 0
-                if bid < 0:
-                    bid = 0
-                # Make sure nominating team bids 1
-                if k == nominating_team:
-                    bid = max(1, bid)
-                bids.append(min(bid, budget))  # Respect team budgets
-    # Round bids to integers for realism
-    return [int(bid) for bid in bids]
+        budget = int(info.get('$ Left', 260) or 260)
+        team_max = int(info.get('max_bid', budget - 1) or 0)
+
+        if team_max < 1:
+            bids.append(0)
+            continue
+
+        # Adjust value by team's cash inflation/deflation factor
+        cash_factor = float(info.get('Cash', 1.0) or 1.0)
+        adjusted_value = player_value * cash_factor
+
+        # Add randomness: normal distribution centered on adjusted value
+        noise = np.random.normal(0, max(1, player_value * timidness))
+        bid = int(round(adjusted_value + noise))
+
+        # Clamp: at least $1, at most team_max / budget / ceiling
+        bid = max(1, min(bid, team_max, budget, int(ceiling)))
+        bids.append(bid)
+
+    return bids
 
 
 
