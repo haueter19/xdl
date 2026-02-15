@@ -1,7 +1,7 @@
 import ast
 import warnings
 from pulp import LpProblem, LpMaximize, LpVariable, LpStatus, lpSum, value, PULP_CBC_CMD
-
+from typing import List, Dict, Optional
 
 class Optimized_Lineups:
     """
@@ -13,9 +13,6 @@ class Optimized_Lineups:
     Roster slots:
         Hitters (14): C, 1B, 2B, 3B, SS, MI, CI, OF×5, DH×2
         Pitchers  (9): P×9 (any SP or RP)
-
-    Position eligibility is read from each player's 'all_pos' field, which is
-    stored as a string representation of a list (e.g. "['C', '1B', 'OF']").
     """
 
     # (slot_name, [eligible position tokens])
@@ -32,22 +29,28 @@ class Optimized_Lineups:
         ('DH1', []), ('DH2', []),  # any hitter is DH-eligible
     ]
 
-    def __init__(self, owner, data, optimize_col='z'):
-        self.owner = owner
-        self.optimize_col = optimize_col
+    def __init__(self, owner, data, optimize_col='z',
+                 player_col='Player', pos_col='all_pos',
+                 owner_col='Owner', type_col='type'):
+        self.owner: str = owner
+        self.optimize_col: str = optimize_col
+        self.player_col: Optional[str] = player_col
+        self.pos_col: Optional[str] = pos_col
+        self.owner_col: Optional[str] = owner_col
+        self.type_col: Optional[str] = type_col
         self.data = data.sort_values(optimize_col, ascending=False)
-
+        
         self.d = (
-            data[data['Owner'] == owner][['Player', 'all_pos', optimize_col, 'type']]
-            .set_index('Player')
+            data[data[owner_col] == owner][[player_col, pos_col, optimize_col, type_col]]
+            .set_index(player_col)
             .to_dict(orient='index')
         )
         # Normalise all_pos to a list regardless of how it was stored/retrieved
         for v in self.d.values():
-            v['all_pos'] = self._parse_all_pos(v['all_pos'])
+            v[pos_col] = self._parse_all_pos(v[pos_col])
 
-        self.p_dict = {k: v for k, v in self.d.items() if 'p' in v['type']}
-        self.h_dict = {k: v for k, v in self.d.items() if 'h' in v['type']}
+        self.p_dict = {k: v for k, v in self.d.items() if 'p' in v[type_col]}
+        self.h_dict = {k: v for k, v in self.d.items() if 'h' in v[type_col]}
 
     # ------------------------------------------------------------------
     # Eligibility helpers
@@ -85,6 +88,16 @@ class Optimized_Lineups:
             return True
         return any(pos in all_pos for pos in positions)
 
+
+    # ------------------------------------------------------------------
+    # Optimize orchestrator
+    # ------------------------------------------------------------------
+    
+    def optimize(self):
+        self._make_pitcher_combos()
+        self._make_hitter_combos()
+        return
+
     # ------------------------------------------------------------------
     # ILP solver
     # ------------------------------------------------------------------
@@ -95,7 +108,7 @@ class Optimized_Lineups:
 
         Parameters
         ----------
-        player_dict : {player_name: {'all_pos': list, optimize_col: float, ...}}
+        player_dict : {player_name: {'pos_col': list, optimize_col: float, ...}}
         slots       : [(slot_name, [eligible_position_tokens]), ...]
 
         Returns
@@ -132,7 +145,7 @@ class Optimized_Lineups:
 
         # Eligibility: fix ineligible player-slot pairs to 0
         for i, player in enumerate(players):
-            p_pos = player_dict[player]['all_pos']
+            p_pos = player_dict[player][self.pos_col]
             for s, eligible_pos in slots:
                 if not self._is_eligible(p_pos, eligible_pos):
                     prob += x[i][s] == 0
@@ -162,7 +175,7 @@ class Optimized_Lineups:
         for s, eligible_pos in slots:
             eligible = [
                 p for p in player_dict
-                if self._is_eligible(player_dict[p]['all_pos'], eligible_pos)
+                if self._is_eligible(player_dict[p][self.pos_col], eligible_pos)
             ]
             flag = " *** NO ELIGIBLE PLAYERS ***" if not eligible else ""
             lines.append(f"  {s:>4} {eligible_pos}: {eligible}{flag}")
@@ -185,10 +198,12 @@ class Optimized_Lineups:
             key=lambda p: self.p_dict[p][self.optimize_col],
             reverse=True,
         )
-        self.pitcher_optimized_lineup = sorted_pitchers[:9]
+        lineup = sorted_pitchers[:9]
+        self.pitcher_optimized_lineup = {
+            f'P{i}': player for i, player in enumerate(lineup, 1)
+        }
         self.pitcher_optimized_z = sum(
-            self.p_dict[p][self.optimize_col]
-            for p in self.pitcher_optimized_lineup
+            self.p_dict[p][self.optimize_col] for p in lineup
         )
 
     def _make_hitter_combos(self):
@@ -202,12 +217,12 @@ class Optimized_Lineups:
         assignment, status = self._solve_ilp(self.h_dict, self.HITTER_SLOTS)
         if assignment is None:
             self._warn_infeasible('hitter', self.h_dict, self.HITTER_SLOTS, status)
-            self.hitter_optimized_lineup = []
+            self.hitter_optimized_lineup = {}
             self.hitter_optimized_z = 0
             return
 
-        self.hitter_optimized_lineup = list(assignment.values())
+        self.hitter_optimized_lineup = assignment
         self.hitter_optimized_z = sum(
             self.h_dict[p][self.optimize_col]
-            for p in self.hitter_optimized_lineup
+            for p in assignment.values()
         )
