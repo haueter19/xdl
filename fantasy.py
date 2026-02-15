@@ -374,7 +374,7 @@ OPT_POS = ['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 
            'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9',
            'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
 
-STAT_COLS = ['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'QS', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']
+STAT_COLS = ['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'QS', 'SO', 'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']
 
 
 def load_roster_data():
