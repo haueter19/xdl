@@ -219,17 +219,24 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
             h[i] = h[i].astype(int)
     owners_df = h.query('Paid>0').groupby('Owner').agg({'Name':'count', 'Paid':'sum', 'z':'sum', 'H':'sum', 'AB':'sum', 'HR':'sum', 'R':'sum', 'RBI':'sum', 'SB':'sum', 'Outs':'sum', 'QS':'sum', 'SO':'sum', 'SvHld':'sum', 'ER':'sum', 'IP':'sum', 'BB':'sum', 'HA':'sum'}).reset_index()
     owners_df.rename(columns={'Name':'Drafted'},inplace=True)
+    # Ensure all teams appear, even those with no drafted players yet
+    all_owners = pd.DataFrame({'Owner': owner_list})
+    owners_df = all_owners.merge(owners_df, on='Owner', how='left')
+    owners_df.fillna({'Drafted':0, 'Paid':0, 'z':0, 'H':0, 'AB':0, 'HR':0, 'R':0, 'RBI':0, 'SB':0, 'Outs':0, 'QS':0, 'SO':0, 'SvHld':0, 'ER':0, 'IP':0, 'BB':0, 'HA':0}, inplace=True)
     owners_df['Paid'] = owners_df['Paid'].apply(lambda x: int(x) if x>0 else x)
-    owners_df['$/unit'] = round(owners_df['Paid']/owners_df['z'],1)
+    owners_df['$/unit'] = round(owners_df['Paid']/owners_df['z'].replace(0, np.nan),1).fillna(0)
     owners_df['z'] = round(owners_df['z'],1)
     owners_df['$ Left'] = tm_dollars - owners_df['Paid']
-    owners_df['$ Left / Plyr'] = round(owners_df['$ Left'] / (tm_players -owners_df['Drafted']),1)
+    owners_df['$ Left / Plyr'] = round(owners_df['$ Left'] / (tm_players -owners_df['Drafted']).replace(0, np.nan),1).fillna(0)
     owners_df['max_bid'] = owners_df['$ Left'] - (tm_players - owners_df['Drafted'])
-    owners_df['Cash'] = round(owners_df['$ Left / Plyr'] / (((tot_dollars - owners_df.Paid.sum()) + owners_df['Paid']) / ((tot_players - owners_df.Drafted.sum()) + owners_df['Drafted'])),2)
+    total_paid = owners_df['Paid'].sum()
+    total_drafted = owners_df['Drafted'].sum()
+    avg_dollars_per_player = (tot_dollars - total_paid + owners_df['Paid']) / (tot_players - total_drafted + owners_df['Drafted']).replace(0, np.nan)
+    owners_df['Cash'] = round(owners_df['$ Left / Plyr'] / avg_dollars_per_player, 2).fillna(1.0)
     owners_df['Value'] = round((owners_df['z']*orig_conv) - owners_df['Paid'],1)
-    owners_df['BA'] = round(owners_df['H']/owners_df['AB'],3)
-    owners_df['ERA'] = round(owners_df['ER']/(owners_df['Outs']/3)*9,2)
-    owners_df['WHIP'] = round((owners_df['BB']+owners_df['HA'])/(owners_df['Outs']/3),2)
+    owners_df['BA'] = round(owners_df['H']/owners_df['AB'].replace(0, np.nan),3).fillna(0)
+    owners_df['ERA'] = round(owners_df['ER']/(owners_df['Outs'].replace(0, np.nan)/3)*9,2).fillna(0)
+    owners_df['WHIP'] = round((owners_df['BB']+owners_df['HA'])/(owners_df['Outs'].replace(0, np.nan)/3),2).fillna(0)
     owners_df['Pts'] = 0
     for i in ['BA', 'HR', 'R', 'RBI', 'SB', 'ERA', 'WHIP', 'QS', 'SO', 'SvHld']:
         owners_df['Pts'] += owners_df[i].rank()
@@ -335,7 +342,7 @@ async def get_bids(request: Request):
     roster = pd.DataFrame(data['roster'])
     roster['Pos'] = opt_pos
     o = pd.DataFrame(data['owners']).T.set_index('Owner').reindex(owner_list)
-    o.fillna({'$ Left':260, 'max_bid':237, 'Drafted':0, '$ Left/Plyr':11.3}, inplace=True)
+    o.fillna({'$ Left':260, 'max_bid':237, 'Drafted':0, '$ Left / Plyr':11.3, 'Cash':1.0, 'z':0, 'Paid':0}, inplace=True)
     o['$ Left'] = o['$ Left'].astype(int)
 
     bids = fu.simulate_auction(data['player_data'], o.to_dict(orient='index'), roster.set_index('Pos'), .3)
