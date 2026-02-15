@@ -394,12 +394,17 @@ $(document).ready(function(){
             type: 'POST',
             data: JSON.stringify(jsonData),
             contentType: 'application/json',
+            dataType: 'json',
             success: function(response) {
                 lastBidResult = response;
                 $("#bidWinner").html(
                     '<strong>' + response.winner + '</strong> $' + response.price
                     + ' <span class="text-muted-custom">(would pay up to $' + response.max_willingness + ')</span>'
                 );
+            },
+            error: function(xhr, status, error) {
+                console.error('get_bids failed:', status, error, xhr.responseText);
+                $("#bidWinner").html('<span class="text-negative">Auction sim error: ' + error + '</span>');
             }
         });
 
