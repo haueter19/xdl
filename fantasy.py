@@ -191,7 +191,7 @@ async def slash_route():
 
 @app.get("/draft")
 async def draft_view(request: Request, status: Optional[str] = 'ok'):
-    h = pd.read_sql('players'+str(datetime.now().year-1), engine)
+    h = pd.read_sql('players'+str(datetime.now().year), engine)
     h['cbsid'] = h['cbsid'].astype(int)
     h.loc[h['Primary_Pos'].isin(['C', '1B', '2B', '3B', 'OF', 'DH', 'SS']), 'PosClass'] = 'h'
     h.fillna({'PosClass':'p'}, inplace=True)
@@ -301,48 +301,6 @@ async def update_db(cbsid=int, owner=str, price=int, supp=Optional[int] == 0):
     conn.commit()
     conn.close()
     return RedirectResponse('/draft', status_code=303)
-
-#@app.get("/draft/update_bid")
-#async def update_db(cbsid=int, owner=str, price=int, supp=Optional[int] == 0):
-#    print(f"Endpoint triggered for cbsid: {cbsid}, owner: {owner}")
-#
-#    # Reset the draft player tracking
-#    if hasattr(fu.check_roster_pos, '_current_draft_player'):
-#        delattr(fu.check_roster_pos, '_current_draft_player')
-#
-#    df = pd.read_sql(f"SELECT cbsid, Name, '{owner}' As Owner, Pos, COALESCE(Paid,{price},0) Paid, Supp, Team, Timestamp, Keeper, Value FROM players{datetime.now().year} WHERE Owner='{owner}' or cbsid={cbsid}", engine)
-#    df.loc[df['cbsid']==int(cbsid), ['Paid', 'Supp']] = [int(price), int(supp)]
-#    
-#    player = df[df['cbsid']==int(cbsid)].iloc[0][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
-#    roster = build_roster(n_teams, owner_list, df, fu.pos_order)
-#    
-#    # Debug your roster to check pitcher positions specifically
-#    print("Current roster for", owner)
-#    pitcher_positions = [pos for pos in fu.pos_order if pos.startswith('P')]
-#    for pos in pitcher_positions:
-#        player_name = roster.loc[pos, owner]
-#        print(f"{pos}: {player_name if player_name != 0 else 'EMPTY'}")#
-#
-#    results = fu.check_roster_pos(player, roster, df, fu.pos_order)
-#    
-#    # Check if we couldn't find a position
-#    if not results:
-#        print('Empty results returned')
-#        return RedirectResponse('/draft?status=unrosterable')
-#    
-#    for result in results:
-#        for val in result.values():
-#            if val is None:
-#                print('no roster spot available')
-#                return RedirectResponse('/draft?status=unrosterable')#
-#
-#    conn = engine.connect()
-#    meta.create_all(engine)
-#    conn.execute(players.update().values(Paid=price, Supp=supp, Owner=owner, Timestamp=datetime.now()).where(players.c.cbsid==cbsid))
-#    conn.commit()
-#    conn.close()
-#    return RedirectResponse('/draft', status_code=303)
-
 
 
 @app.get("/draft/sims/{cbsid}")
