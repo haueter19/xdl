@@ -33,15 +33,22 @@ class Optimized_Lineups:
                  player_col='Player', pos_col='all_pos',
                  owner_col='Owner', type_col='type'):
         self.owner: str = owner
-        self.optimize_col: str = optimize_col
         self.player_col: Optional[str] = player_col
         self.pos_col: Optional[str] = pos_col
         self.owner_col: Optional[str] = owner_col
         self.type_col: Optional[str] = type_col
-        self.data = data.sort_values(optimize_col, ascending=False)
-        
+
+        # Normalise optimize_col to a list internally; keep the original for compat
+        self.optimize_col: str = optimize_col if isinstance(optimize_col, str) else optimize_col[0]
+        self._optimize_cols: List[str] = (
+            [optimize_col] if isinstance(optimize_col, str) else list(optimize_col)
+        )
+
+        self.data = data.sort_values(self._optimize_cols, ascending=False)
+
+        keep_cols = [player_col, pos_col, type_col] + self._optimize_cols
         self.d = (
-            data[data[owner_col] == owner][[player_col, pos_col, optimize_col, type_col]]
+            data[data[owner_col] == owner][keep_cols]
             .set_index(player_col)
             .to_dict(orient='index')
         )
@@ -104,11 +111,16 @@ class Optimized_Lineups:
 
     def _solve_ilp(self, player_dict: dict, slots: list) -> tuple[dict, int] | tuple[None, int]:
         """
-        Assign players to slots maximising the optimize_col score.
+        Assign players to slots via lexicographic ILP optimisation.
+
+        When multiple columns are specified in optimize_col, the solver
+        maximises the first column, locks that result as a constraint,
+        then maximises the second column, and so on.  With a single column
+        this reduces to a standard ILP solve.
 
         Parameters
         ----------
-        player_dict : {player_name: {'pos_col': list, optimize_col: float, ...}}
+        player_dict : {player_name: {'pos_col': list, col: float, ...}}
         slots       : [(slot_name, [eligible_position_tokens]), ...]
 
         Returns
@@ -118,43 +130,66 @@ class Optimized_Lineups:
         """
         players = list(player_dict.keys())
         slot_names = [s for s, _ in slots]
+        n_players = len(players)
 
-        prob = LpProblem("lineup", LpMaximize)
+        # Constraints carried forward from higher-priority columns:
+        #   [(col, achieved_value), ...]
+        locked = []
 
-        # x[i][s] = 1  iff  players[i] is assigned to slot s
-        x = {
-            i: {s: LpVariable(f"x_{i}_{s}", cat='Binary')
-                for s in slot_names}
-            for i in range(len(players))
-        }
+        for col in self._optimize_cols:
+            prob = LpProblem("lineup", LpMaximize)
 
-        # Objective: maximise total score
-        prob += lpSum(
-            player_dict[players[i]][self.optimize_col] * x[i][s]
-            for i in range(len(players))
-            for s in slot_names
-        )
+            x = {
+                i: {s: LpVariable(f"x_{i}_{s}", cat='Binary')
+                    for s in slot_names}
+                for i in range(n_players)
+            }
 
-        # Each slot filled by exactly one player
-        for s in slot_names:
-            prob += lpSum(x[i][s] for i in range(len(players))) == 1
+            # Objective: maximise *this* column
+            prob += lpSum(
+                player_dict[players[i]][col] * x[i][s]
+                for i in range(n_players)
+                for s in slot_names
+            )
 
-        # Each player fills at most one slot
-        for i in range(len(players)):
-            prob += lpSum(x[i][s] for s in slot_names) <= 1
+            # Each slot filled by exactly one player
+            for s in slot_names:
+                prob += lpSum(x[i][s] for i in range(n_players)) == 1
 
-        # Eligibility: fix ineligible player-slot pairs to 0
-        for i, player in enumerate(players):
-            p_pos = player_dict[player][self.pos_col]
-            for s, eligible_pos in slots:
-                if not self._is_eligible(p_pos, eligible_pos):
-                    prob += x[i][s] == 0
+            # Each player fills at most one slot
+            for i in range(n_players):
+                prob += lpSum(x[i][s] for s in slot_names) <= 1
 
-        prob.solve(PULP_CBC_CMD(msg=0))
+            # Eligibility
+            for i, player in enumerate(players):
+                p_pos = player_dict[player][self.pos_col]
+                for s, eligible_pos in slots:
+                    if not self._is_eligible(p_pos, eligible_pos):
+                        prob += x[i][s] == 0
 
-        if prob.status != 1:   # 1 = Optimal
-            return None, prob.status
+            # Lock in results from higher-priority columns
+            for locked_col, locked_val in locked:
+                prob += lpSum(
+                    player_dict[players[i]][locked_col] * x[i][s]
+                    for i in range(n_players)
+                    for s in slot_names
+                ) >= locked_val
 
+            prob.solve(PULP_CBC_CMD(msg=0))
+
+            if prob.status != 1:
+                return None, prob.status
+
+            # Record the achieved value for this column
+            achieved = sum(
+                player_dict[players[i]][col] * value(x[i][s])
+                for i in range(n_players)
+                for s in slot_names
+                if value(x[i][s]) is not None and value(x[i][s]) > 0.5
+            )
+            locked.append((col, achieved))
+
+        # Extract final assignment from the last solve
         assignment = {}
         for s in slot_names:
             for i, player in enumerate(players):
@@ -192,10 +227,11 @@ class Optimized_Lineups:
 
         Because all 9 P slots are interchangeable (any SP/RP fills any slot),
         the greedy top-9 by score is provably optimal — no combinations needed.
+        With multiple optimize columns, sorts lexicographically by the tuple.
         """
         sorted_pitchers = sorted(
             self.p_dict,
-            key=lambda p: self.p_dict[p][self.optimize_col],
+            key=lambda p: tuple(self.p_dict[p][c] for c in self._optimize_cols),
             reverse=True,
         )
         lineup = sorted_pitchers[:9]
