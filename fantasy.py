@@ -116,7 +116,14 @@ def optimize_team(tm, df):
     x.catchers = [k for k,v in x.h_dict.items() if 'C,' in v['all_pos']]
     x._make_pitcher_combos()
     x._make_hitter_combos()
-    return {'pitcher_z':x.pitcher_optimized_z, 'pitcher_lineup':x.pitcher_optimized_lineup, 'hitter_z':x.hitter_optimized_z, 'hitter_lineup':x.hitter_optimized_lineup}
+    return {
+        'pitcher_z': x.pitcher_optimized_z,
+        'pitcher_lineup': list(x.pitcher_optimized_lineup.values()),
+        'pitcher_positions': x.pitcher_optimized_lineup,
+        'hitter_z': x.hitter_optimized_z,
+        'hitter_lineup': list(x.hitter_optimized_lineup.values()),
+        'hitter_positions': x.hitter_optimized_lineup,
+    }
 
 
 def build_roster(n_teams, owner_list, df, pos_order):
@@ -363,11 +370,17 @@ async def get_bids(request: Request):
 
 
 
-@app.get('/optimize')
-async def optimize(tm: str):
+OPT_POS = ['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2',
+           'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9',
+           'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
+
+STAT_COLS = ['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'QS', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']
+
+
+def load_roster_data():
     yr = datetime.now().year
-    wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week']-1
-    df  = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
+    wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week'] - 1
+    df = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
                     CASE WHEN e.DH>=5 THEN 'h' ELSE 'p' END As type \
                     FROM roster r \
                     INNER JOIN projections j On (j.cbsid=r.cbsid) \
@@ -376,68 +389,96 @@ async def optimize(tm: str):
                     INNER JOIN (SELECT cbsid, all_pos, posC C, pos1B '1B', pos2B '2B', pos3B '3B', posSS SS, posOF OF, posDH DH, posSP SP, posRP RP, posP P FROM eligibility WHERE year=2024 and week={wk}) e On (r.cbsid=e.cbsid) \
             WHERE j.year={yr} AND j.week={wk} AND j.proj_type='ros' AND r.year={yr} AND r.week={wk} \
             ORDER BY Owner, year, week", engine)
-    
-    opt = optimize_team(tm, df)
-    df['z'] = round(df['z'],1)
-    df.fillna(0,inplace=True)
-    opt_pos = ['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4','OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
-    bench = df[(df['Owner']==tm) & (~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup']))].sort_values('type')['Player'].to_list()
-    df = df[df['Owner']==tm].set_index('Player').reindex(opt['hitter_lineup']+opt['pitcher_lineup']+bench).reset_index()
-    df['optimized_position'] = opt_pos[:df.shape[0]]
-    df.loc[df['Player'].isin(opt['hitter_lineup']), 'opt_designation'] = 'starting_hitter'
-    df.loc[df['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
-    df.loc[(~df['Player'].isin(opt['hitter_lineup'])) & (df['type']=='h'), 'opt_designation'] = 'bench_hitter'
-    df.loc[(~df['Player'].isin(opt['pitcher_lineup'])) & (df['type']=='p'), 'opt_designation'] = 'bench_pitcher'
-    opt_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'QS', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']].sum()
-    opt_totals['z'] = round(opt_totals['z'],1)
-    opt_totals['hitter_z'] = round(df[df['Player'].isin(opt['hitter_lineup'])]['z'].sum(),1)
-    opt_totals['BA'] = round(opt_totals['H']/opt_totals['AB'],3)
-    opt_totals['ERA'] = round(opt_totals['ER']/opt_totals['IP']*9,2)
-    opt_totals['WHIP'] = round((opt_totals['BBa']+opt_totals['Ha'])/opt_totals['IP'],2)
-    opt_totals.to_dict()
-    bench_totals = df[~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'QS', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
-    bench_totals['z'] = round(bench_totals['z'],1)
-    opt_totals['pitcher_z'] = round(df[df['Player'].isin(opt['pitcher_lineup'])]['z'].sum(),1)
-    bench_totals['BA'] = round(bench_totals['H']/bench_totals['AB'],3)
-    bench_totals['ERA'] = round(bench_totals['ER']/bench_totals['IP']*9,2)
-    bench_totals['WHIP'] = round((bench_totals['BBa']+bench_totals['Ha'])/bench_totals['IP'],2)
-    df = df.to_dict(orient='records')
+    df['z'] = round(df['z'], 1)
+    df.fillna(0, inplace=True)
+    return df
 
-        
-    return {tm:{'roster':df, 'opt_totals':opt_totals, 'bench_totals':bench_totals}}
-    #return {tm:{'pitcher_z':opt['pitcher_optimized_z'], 'pitcher_lineup':opt['pitcher_optimized_lineup'], 'hitter_z':opt['hitter_optimized_z'], 'hitter_lineup':opt['hitter_optimized_lineup']}}
 
+def build_optimized_roster(tm, df, opt=None):
+    if opt is None:
+        opt = optimize_team(tm, df)
+    starters = opt['hitter_lineup'] + opt['pitcher_lineup']
+    bench = df[(df['Owner'] == tm) & (~df['Player'].isin(starters))].sort_values('type')['Player'].to_list()
+    tdf = df[df['Owner'] == tm].set_index('Player').reindex(starters + bench).reset_index()
+    tdf['optimized_position'] = OPT_POS[:tdf.shape[0]]
+    tdf.loc[tdf['Player'].isin(opt['hitter_lineup']), 'opt_designation'] = 'starting_hitter'
+    tdf.loc[tdf['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
+    tdf.loc[(~tdf['Player'].isin(opt['hitter_lineup'])) & (tdf['type'] == 'h'), 'opt_designation'] = 'bench_hitter'
+    tdf.loc[(~tdf['Player'].isin(opt['pitcher_lineup'])) & (tdf['type'] == 'p'), 'opt_designation'] = 'bench_pitcher'
+    return tdf, opt
+
+
+def calc_totals(tdf, opt):
+    starters = opt['hitter_lineup'] + opt['pitcher_lineup']
+    opt_totals = tdf[tdf['Player'].isin(starters)][STAT_COLS].sum()
+    opt_totals['z'] = round(opt_totals['z'], 1)
+    opt_totals['hitter_z'] = round(tdf[tdf['Player'].isin(opt['hitter_lineup'])]['z'].sum(), 1)
+    opt_totals['pitcher_z'] = round(tdf[tdf['Player'].isin(opt['pitcher_lineup'])]['z'].sum(), 1)
+    opt_totals['BA'] = round(opt_totals['H'] / opt_totals['AB'], 3) if opt_totals['AB'] > 0 else 0
+    opt_totals['ERA'] = round(opt_totals['ER'] / opt_totals['IP'] * 9, 2) if opt_totals['IP'] > 0 else 0
+    opt_totals['WHIP'] = round((opt_totals['BBa'] + opt_totals['Ha']) / opt_totals['IP'], 2) if opt_totals['IP'] > 0 else 0
+    bench_totals = tdf[~tdf['Player'].isin(starters)][STAT_COLS].sum()
+    bench_totals['z'] = round(bench_totals['z'], 1)
+    bench_totals['BA'] = round(bench_totals['H'] / bench_totals['AB'], 3) if bench_totals['AB'] > 0 else 0
+    bench_totals['ERA'] = round(bench_totals['ER'] / bench_totals['IP'] * 9, 2) if bench_totals['IP'] > 0 else 0
+    bench_totals['WHIP'] = round((bench_totals['BBa'] + bench_totals['Ha']) / bench_totals['IP'], 2) if bench_totals['IP'] > 0 else 0
+    return opt_totals.to_dict(), bench_totals.to_dict()
+
+
+@app.get('/optimize')
+async def optimize(tm: str):
+    df = load_roster_data()
+    tdf, opt = build_optimized_roster(tm, df)
+    opt_totals, bench_totals = calc_totals(tdf, opt)
+    return {tm: {'roster': tdf.to_dict(orient='records'), 'opt_totals': opt_totals, 'bench_totals': bench_totals}}
 
 
 @app.get('/trade', response_class=HTMLResponse)
 async def trade_analyzer(request: Request):
-    yr = datetime.now().year
-    wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week']-1
-    df  = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
-                    CASE WHEN e.DH>=5 THEN 'h' ELSE 'p' END As type \
-                    FROM roster r \
-                    INNER JOIN projections j On (j.cbsid=r.cbsid) \
-                    INNER JOIN players p On (r.cbsid=p.cbsid) \
-                    INNER JOIN owners o On (r.owner_id=o.owner_id) \
-                    INNER JOIN (SELECT cbsid, all_pos, posC C, pos1B '1B', pos2B '2B', pos3B '3B', posSS SS, posOF OF, posDH DH, posSP SP, posRP RP, posP P FROM eligibility WHERE year=2024 and week={wk}) e On (r.cbsid=e.cbsid) \
-            WHERE j.year={yr} AND j.week={wk} AND j.proj_type='ros' AND r.year={yr} AND r.week={wk} \
-            ORDER BY Owner, year, week", engine)
-    df['z'] = round(df['z'],1)
-    df.fillna(0,inplace=True)
-    
+    df = load_roster_data()
     teams = df.Owner.sort_values().unique().tolist()
-    lg = df[df['Owner']!='Lima Time!'].sort_values(['Owner', 'type']).fillna(0)
-    opt = optimize_team('Lima Time!', df)
-    opt_pos = ['C', '1B', '2B', 'SS', '3B', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4','OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
-    bench = df[(df['Owner']=='Lima Time!') & (~df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup']))].sort_values('type')['Player'].to_list()
-    df = df[df['Owner']=='Lima Time!'].set_index('Player').reindex(opt['hitter_lineup']+opt['pitcher_lineup']+bench).reset_index()
-    df['optimized_position'] = opt_pos[:df.shape[0]]
-    df.loc[df['Player'].isin(opt['hitter_lineup']), 'opt_designation'] = 'starting_hitter'
-    df.loc[df['Player'].isin(opt['pitcher_lineup']), 'opt_designation'] = 'starting_pitcher'
-    df.loc[(~df['Player'].isin(opt['hitter_lineup'])) & (df['type']=='h'), 'opt_designation'] = 'bench_hitter'
-    df.loc[(~df['Player'].isin(opt['pitcher_lineup'])) & (df['type']=='p'), 'opt_designation'] = 'bench_pitcher'
-    ros_totals = df[df['Player'].isin(opt['hitter_lineup']+opt['pitcher_lineup'])][['HR', 'SB', 'R', 'RBI', 'H', 'AB', 'QS', 'SO', 'SvHld', 'IP', 'Ha', 'BBa', 'ER']].sum().to_dict()
-    return templates.TemplateResponse('trade.html', {'request':request, 'data':df.to_dict(orient='records'),
-                    'teams':teams, 'lima':opt, 'opt_pos':opt_pos, 'ros_totals': ros_totals,
-                    'lg':lg.to_dict(orient='records'),
-                    })
+    return templates.TemplateResponse('trade.html', {'request': request, 'teams': teams})
+
+
+class TradeRequest(BaseModel):
+    team1: str
+    team2: str
+    team1_players: list
+    team2_players: list
+
+
+@app.post('/simulate_trade')
+async def simulate_trade(trade: TradeRequest):
+    df = load_roster_data()
+
+    # Pre-trade optimization for both teams
+    tdf1_before, opt1_before = build_optimized_roster(trade.team1, df)
+    tdf2_before, opt2_before = build_optimized_roster(trade.team2, df)
+    totals1_before, _ = calc_totals(tdf1_before, opt1_before)
+    totals2_before, _ = calc_totals(tdf2_before, opt2_before)
+
+    # Swap players
+    df_after = df.copy()
+    df_after.loc[df_after['cbsid'].isin(trade.team1_players), 'Owner'] = trade.team2
+    df_after.loc[df_after['cbsid'].isin(trade.team2_players), 'Owner'] = trade.team1
+
+    # Post-trade optimization for both teams
+    tdf1_after, opt1_after = build_optimized_roster(trade.team1, df_after)
+    tdf2_after, opt2_after = build_optimized_roster(trade.team2, df_after)
+    totals1_after, _ = calc_totals(tdf1_after, opt1_after)
+    totals2_after, _ = calc_totals(tdf2_after, opt2_after)
+
+    return {
+        'team1': {
+            'name': trade.team1,
+            'before': totals1_before,
+            'after': totals1_after,
+            'roster': tdf1_after.to_dict(orient='records'),
+        },
+        'team2': {
+            'name': trade.team2,
+            'before': totals2_before,
+            'after': totals2_after,
+            'roster': tdf2_after.to_dict(orient='records'),
+        },
+    }
