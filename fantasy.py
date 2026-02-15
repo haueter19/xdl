@@ -261,7 +261,7 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
     
     return templates.TemplateResponse('draft.html', {'request':request, 'players':h.sort_values('z', ascending=False), 
                                     'status':status,
-                                    'owned':h[h['Owner'].notna()], 'owners_df':owners_df.sort_values('Rank', ascending=False), 'roster':roster, 'roster_json':roster.to_dict(orient='records'),
+                                    'owned':h[h['Owner'].notna()], 'owners_df':owners_df.sort_values('Rank', ascending=False), 'roster':roster, 'roster_json':roster.to_json(orient='records'),
                                     'owner_list': owner_list,
                                     'owners_json':owners_df.to_json(orient='index'), 
                                     'json':h.sort_values('z', ascending=False).to_json(orient='records'),
