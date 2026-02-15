@@ -1,172 +1,306 @@
-#main {
-	background-color: #ffffff; 
-	width: 1200px; 
-	margin: auto;
-}
-table.dataframe {
-	border-collapse: collapse;
-	border: 1px solid black;
-}
-.dataframe tr:hover {
-	background-color: yellow;
-	color: black;
-}
-.dataframe th {
-	color: white;
-	background-color: black;
-	cursor: pointer;
-}
-.dataframe a {
-	color: blue;
-	text-decoration: none;
-}
-col:first-child {background: #CCC}
-col:nth-child(2n+3) {background: #CCC}
-#myTable {
-	width: 100%;
-	overflow-x: scroll;
-	cursor: pointer;
-}
-#df_table {
-	width:100%;
-	overflow-x: scroll;
-	cursor: pointer;
-}
-.dataframe.th {
-	min-width: 25px;
-}
-.dataframe.tr:nth-child(odd) {
-	background-color: #d1d1d1;
-}
-.no_stripes th {
-	background-color: lightgray;
-}
-.no_stripes tr {
-	background-color: white;
-}
-.no_stripes a {
-	color: black;
-}
-/*
-ul {
-	list-style-type: none;
-	margin: 0;
-	padding: 0;
-	overflow: hidden;
-	background-color: #333;
-  }
-li {
-	float: left;
-}
-li a, .dropbtn {
-	display: inline-block;
-	text-align: center;
-	padding: 14px 16px;
-	text-decoration: none;
-}  
-li a:hover, .dropdown:hover .dropbtn {
-	background-color: red;
-}  
-li.dropdown {
-	display: inline-block;
+/* ===== Design Tokens ===== */
+:root {
+    --color-primary: #1a56db;
+    --color-primary-light: #e8eefb;
+    --color-my-team: #1a56db;
+    --color-positive: #16a34a;
+    --color-negative: #dc2626;
+    --color-muted: #6b7280;
+    --color-surface: #ffffff;
+    --color-bg: #f1f5f9;
+    --color-border: #e2e8f0;
+    --color-header-bg: #f8fafc;
+    --font-size-xs: 11px;
+    --font-size-sm: 12px;
+    --font-size-base: 13px;
+    --radius: 6px;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 2px 6px rgba(0,0,0,0.08);
 }
 
-.dropdown-content {
-	display: none;
-	position: absolute;
-	background-color: #f9f9f9;
-	min-width: 160px;
-	box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-	z-index: 1;
-}  
-.dropdown-content a {
-	color: black;
-	padding: 12px 16px;
-	text-decoration: none;
-	display: block;
-	text-align: left;
-}
-.dropdown-content a:hover {background-color: #f1f1f1;}
-.dropdown:hover .dropdown-content {
-	display: block;
-}
-*/
+/* ===== Base ===== */
 body {
-	background-color: gray
-	/*
-	BACKGROUND-IMAGE: url('/static/images/rockerslogo-header.jpg');
-	BACKGROUND-REPEAT: repeat;
-	*/
+    background-color: var(--color-bg);
+    font-size: var(--font-size-base);
 }
-/*
-ul.breadcrumb {
-	padding: 0px 10px;
-	list-style: none;
-	background-color: #eee;
+
+/* ===== Draft Cards ===== */
+.draft-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 12px 14px;
+    height: 100%;
 }
-ul.breadcrumb li {
-	display: inline;
-	font-size: 16px;
-	color: #0275d8;
-	text-decoration: none;
-	vertical-align: middle;
+.draft-card-header {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--color-primary);
+    color: #1e293b;
 }
-ul.breadcrumb li+li:before {
-	padding: 8px;
-	color: black;
-	content: "/\00a0";
+
+/* ===== Data Tables ===== */
+.draft-table {
+    font-size: var(--font-size-sm);
+    width: 100%;
 }
-ul.breadcrumb li a {
-	color: #0275d8;
-	text-decoration: none;
+.draft-table thead th {
+    background-color: var(--color-header-bg);
+    border-bottom: 2px solid var(--color-border);
+    font-weight: 600;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--color-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    padding: 6px 5px;
 }
-ul.breadcrumb li a:hover {
-	color: #01447e;
-	text-decoration: underline;
+.draft-table tbody td {
+    padding: 4px 5px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--color-border);
 }
-li a:hover, .dropdown:hover .breadcrumb {
-	background-color: #eee;
-	vertical-align: middle;
+.draft-table tbody tr:hover {
+    background-color: var(--color-primary-light);
 }
-*/
-.tab {
-	float: left;
-	border: 1px solid #ccc;
-	background-color: #f1f1f1;
-	width: 100%;
-  }
-  
-  /* Style the buttons that are used to open the tab content */
-  .tab button {
-	display: block;
-	background-color: inherit;
-	color: black;
-	padding: 4px 10px;
-	width: 100%;
-	border: none;
-	outline: none;
-	text-align: left;
-	cursor: pointer;
-	transition: 0.3s;
-  }
-  
-  /* Change background color of buttons on hover */
-  .tab button:hover {
-	background-color: #ddd;
-  }
-  
-  /* Create an active/current "tab button" class */
-  .tab button.active {
-	background-color: #ccc;
-  }
-  
-  /* Style the tab content */
-  .tabcontent {
-	float: left;
-	display: none;
-	padding: 0px 12px;
-	border: 1px solid #ccc;
-	width: 100%;
-	border-left: none;
-	height: 100%;
-  }
+
+/* ===== Team Highlight ===== */
+.my-team {
+    color: var(--color-my-team);
+    font-weight: 600;
+}
+.my-team-row td {
+    color: var(--color-my-team);
+    font-weight: 600;
+}
+
+/* ===== Value Colors ===== */
+.text-positive { color: var(--color-positive); }
+.text-negative { color: var(--color-negative); }
+.text-value { color: var(--color-negative); font-weight: 600; }
+.text-muted-custom { color: var(--color-muted); }
+
+/* ===== Top Row ===== */
+.draft-top-row {
+    background: var(--color-surface);
+    border-bottom: 3px solid var(--color-primary);
+    padding: 12px 0;
+    box-shadow: var(--shadow-md);
+}
+
+/* ===== Sidebar Sections ===== */
+.draft-scroll-pane {
+    height: 500px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.draft-scroll-pane::-webkit-scrollbar {
+    width: 5px;
+}
+.draft-scroll-pane::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 3px;
+}
+
+/* ===== Draft Order List ===== */
+.draft-order-table {
+    font-size: var(--font-size-sm);
+    width: 100%;
+}
+.draft-order-table td {
+    padding: 3px 4px;
+    border-bottom: 1px solid var(--color-border);
+}
+.draft-order-table tr:hover {
+    background-color: var(--color-primary-light);
+    cursor: pointer;
+}
+
+/* ===== Cash Meter ===== */
+.cash-meter-table {
+    font-size: var(--font-size-sm);
+    width: 100%;
+}
+.cash-meter-table th {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    color: var(--color-muted);
+    font-weight: 600;
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--color-border);
+}
+.cash-meter-table td {
+    padding: 2px 4px;
+    border-bottom: 1px solid var(--color-border);
+}
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--font-size-sm);
+}
+.stat-badge .stat-label {
+    color: var(--color-muted);
+    font-size: var(--font-size-xs);
+}
+.stat-badge .stat-value {
+    font-weight: 600;
+}
+.inflation-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-negative);
+}
+
+/* ===== Tabs ===== */
+.nav-tabs .nav-link {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--color-muted);
+    border: none;
+    padding: 8px 14px;
+}
+.nav-tabs .nav-link:hover {
+    color: var(--color-primary);
+    border-bottom: 2px solid var(--color-primary);
+}
+.nav-tabs .nav-link.active {
+    color: var(--color-primary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--color-primary);
+    background: transparent;
+}
+.tab-content > .tab-pane {
+    padding-top: 12px;
+}
+
+/* ===== Avg Stats Badges ===== */
+.avg-stats-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-border);
+}
+.avg-stat-chip {
+    display: inline-block;
+    background: var(--color-header-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: var(--font-size-xs);
+}
+.avg-stat-chip .label {
+    color: var(--color-muted);
+    margin-right: 3px;
+}
+.avg-stat-chip .val {
+    font-weight: 600;
+}
+
+/* ===== Form Area ===== */
+.bid-form .form-control {
+    font-size: var(--font-size-sm);
+}
+.bid-form input[type="text"] {
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: var(--font-size-sm);
+}
+.team-radio-grid {
+    font-size: var(--font-size-xs);
+}
+.team-radio-grid label {
+    cursor: pointer;
+    white-space: nowrap;
+}
+.team-radio-grid input[type="radio"] {
+    margin-right: 2px;
+}
+
+/* ===== Roster Table ===== */
+.roster-table {
+    font-size: var(--font-size-xs);
+}
+.roster-table thead th {
+    background-color: var(--color-header-bg);
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    padding: 4px 3px;
+    border-bottom: 2px solid var(--color-border);
+    white-space: nowrap;
+}
+.roster-table tbody td {
+    padding: 2px 3px;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.roster-table tbody td:first-child {
+    font-weight: 600;
+}
+.roster-table tbody tr:hover {
+    background-color: var(--color-primary-light);
+}
+.roster-table .col-my-team {
+    color: var(--color-my-team);
+    font-weight: 600;
+}
+
+/* ===== Chart Buttons ===== */
+.chart-btn-group .btn {
+    font-size: var(--font-size-xs);
+    padding: 4px 10px;
+}
+
+/* ===== Player Stats Window ===== */
+#player_stats_window {
+    font-size: var(--font-size-sm);
+}
+#player_stats_window .table {
+    font-size: var(--font-size-sm);
+}
+
+/* ===== Sims Pane ===== */
+#sims {
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+#bidWinner {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    padding: 4px 8px;
+    background: var(--color-primary-light);
+    border-radius: 4px;
+}
+
+/* ===== Error Message ===== */
+#error_msg {
+    font-size: var(--font-size-sm);
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+/* ===== Reset Link ===== */
+.reset-link {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted);
+    text-decoration: none;
+}
+.reset-link:hover {
+    color: var(--color-negative);
+}

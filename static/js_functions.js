@@ -171,14 +171,14 @@ $.fn.paid_histogram = function(){
 
 
 $.fn.update_player_stats_window = function(selected_index){
-    let tbl_html = '<table class="table fs-6" id="player_table">'
-    +'<tr><thead><th>cbsid</th><th>Name</th><th>Team</th><th>Pos</th><th>Age</th><th>Proj Value</th><th>Market</th><th>CBS</th><th>FG</th><th>Val_ly</th><th>Z</th><th>Vol</th><th>Skew</th></thead></tr>'
+    let tbl_html = '<table class="table draft-table" id="player_table">'
+    +'<thead><tr><th>cbsid</th><th>Name</th><th>Team</th><th>Pos</th><th>Age</th><th>Proj Value</th><th>Market</th><th>CBS</th><th>FG</th><th>Val_ly</th><th>Z</th><th>Vol</th><th>Skew</th></tr></thead>'
     +'<tr><td>'+data[selected_index]['cbsid']+'</td>'
     +'<td>'+data[selected_index]['Name']+'</td>'
     +'<td>'+data[selected_index]['Team']+'</td>'
     +'<td>'+data[selected_index]['Pos']+'</td>'
     +'<td>'+data[selected_index]['player_age_ly']+'</td>'
-    +'<td><font color="red">$'+data[selected_index]['Value']+'</font></td>'
+    +'<td class="text-value">$'+data[selected_index]['Value']+'</td>'
     +'<td>'+data[selected_index]['curValue']+'</td>'
     +'<td>'+data[selected_index]['CBS']+'</td>'
     +'<td>'+data[selected_index]['Dollars']+'</td>'
@@ -186,10 +186,10 @@ $.fn.update_player_stats_window = function(selected_index){
     +'<td>'+data[selected_index]['z']+'</td>'
     +'<td>'+data[selected_index]['Vol'].toFixed(2)+'</td>'
     +'<td>'+data[selected_index]['Skew'].toFixed(2)+'</td>'
-    +'</tr></table><br>'
+    +'</tr></table>'
     if ((data[selected_index]['Primary_Pos']=='SP') || (data[selected_index]['Primary_Pos']=='RP')){
-        tbl_html += `<table class="table table-striped fs-6"><tr><thead><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>S+H</th>
-        <th>K-BB%</th><th>K/9</th><th>Velo</th><th>IVB</th><th>woba_diff</th><th>Whiff%</th><th>EV</th></thead></tr>`
+        tbl_html += `<table class="table draft-table table-striped"><thead><tr><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>S+H</th>
+        <th>K-BB%</th><th>K/9</th><th>Velo</th><th>IVB</th><th>woba_diff</th><th>Whiff%</th><th>EV</th></tr></thead>`
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['IP']+'</td>'
         +'<td>'+data[selected_index]['ERA']+'</td>'
@@ -229,8 +229,8 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['exit_velocity_avg_2ly']+'</td>'
         +'</tr></table>'
     } else {
-        tbl_html += `<table class="table table-striped fs-6"><tr><thead><th>Type</th><th>PA</th><th>wOBAdiff</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th>
-        <th>Brl%</th><th>EV</th><th>Spd</th><th>Whiff%</th><th>wRC+</th></thead></tr>`
+        tbl_html += `<table class="table draft-table table-striped"><thead><tr><th>Type</th><th>PA</th><th>wOBAdiff</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th>
+        <th>Brl%</th><th>EV</th><th>Spd</th><th>Whiff%</th><th>wRC+</th></tr></thead>`
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['PA'].toFixed(1)+'</td>'
         +'<td>-</td><td>-</td>'
@@ -375,7 +375,7 @@ $(document).ready(function(){
             $.each(resp, function(i, v){
                 values.push(v.Name +', '+ v.Value.toFixed(1).toString() + '<br>');
             })
-            $("#sims").html('<font size="2">'+values+'</font>');
+            $("#sims").html(values.join(''));
         });
         
         // new and experimental
@@ -528,10 +528,7 @@ $(document).ready(function(){
             }
         });
     });
-    // Using jQuery to select the <tr> by id and then find all <td> elements within it
-    // Selecting an element with a space in its id attribute using attribute selector
-    $('[id="z_table_Lima Time"]').find('td').css('font-weight', 'bold');
-    $('[id="z_table_Lima Time"]').find('td').css('color', 'blue');
+    // Lima Time highlighting now handled by .my-team-row CSS class in the template
 
 
     document.getElementById("z_players_chart").on('plotly_click', function(data){
