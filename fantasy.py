@@ -120,79 +120,65 @@ def optimize_team(tm, df):
 
 
 def build_roster(n_teams, owner_list, df, pos_order):
-    roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9',
-                             'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'], data=np.zeros((33,n_teams)), columns=owner_list)
-    
-    # Keep track of players we've already rostered
-    rostered_players = {team: set() for team in owner_list}
-    
-    # Process players in order of versatility (least versatile first)
+    """
+    Build a roster DataFrame for all teams. Uses cbsid internally for reliable
+    lookups, then converts to player names before returning for display.
+    """
+    roster_positions = [
+        'C', '1B', '2B', '3B', 'SS', 'MI', 'CI',
+        'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2',
+        'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9',
+        'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10',
+    ]
+    bench_slots = [p for p in roster_positions if p.startswith('B')]
+    roster = pd.DataFrame(
+        index=roster_positions,
+        data=np.zeros((len(roster_positions), n_teams), dtype=int),
+        columns=owner_list,
+    )
+
     for tm in owner_list:
-        # Get all players for this team
-        team_players = df[df['Owner']==tm][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].copy()
-        
-        # Sort bench players by supp value
-        bench_players = team_players[team_players['Paid']==0].sort_values("Supp").copy()
-        
-        # Handle bench players first
-        for i, row in bench_players.iterrows():
-            if row['Name'] not in rostered_players[tm]:
-                print(row['Name'], 'B'+str(int(row['Supp'])))
-                roster.loc['B'+str(int(row['Supp'])),tm] = row['Name']
-                rostered_players[tm].add(row['Name'])
-        
-        # Calculate versatility for each player
-        def get_versatility(pos):
-            return len(fu.get_eligible_positions(pos, pos_order))
-        
-        # Add versatility column
-        active_players = team_players[team_players['Paid']>0].copy()
-        active_players['versatility'] = active_players['Pos'].apply(get_versatility)
-        
-        # Sort by versatility (least versatile first) and then by timestamp
-        active_players = active_players.sort_values(["versatility", "Timestamp"])
-        
-        # Process active players
-        for i, row in active_players.iterrows():
-            # Skip if this player is already rostered
-            if row['Name'] in rostered_players[tm]:
-                print(f"Skipping {row['Name']} as they are already rostered")
+        team_players = df[df['Owner'] == tm][
+            ['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']
+        ].copy()
+
+        # --- Bench players (Paid == 0) ---
+        bench_players = team_players[team_players['Paid'] == 0].sort_values('Supp')
+        for _, row in bench_players.iterrows():
+            cbsid = int(row['cbsid'])
+            target = 'B' + str(int(row['Supp']))
+            # Handle collision: if target bench slot is taken, find the next open one
+            if roster.loc[target, tm] != 0:
+                for slot in bench_slots:
+                    if roster.loc[slot, tm] == 0:
+                        target = slot
+                        break
+            roster.loc[target, tm] = cbsid
+
+        # --- Active players (Paid > 0), least versatile first ---
+        active_players = team_players[team_players['Paid'] > 0].copy()
+        active_players['versatility'] = active_players['Pos'].apply(
+            lambda pos: len(fu.get_eligible_positions(pos, pos_order))
+        )
+        active_players = active_players.sort_values(['versatility', 'Timestamp'])
+
+        for _, row in active_players.iterrows():
+            cbsid = int(row['cbsid'])
+            if cbsid in roster[tm].values:
                 continue
-                
-            player_dict = row[['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
-            results = fu.check_roster_pos(player_dict, roster, df, pos_order, is_draft_operation=False)
-            print(f"Results for {row['Name']}: {results}")
-            
-            # Process results to update roster
+
+            player_dict = row[
+                ['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']
+            ].to_dict()
+            results = fu.check_roster_pos(player_dict, roster, df, pos_order)
+
             for result in results:
-                for player_name, position in result.items():
+                for pid, position in result.items():
                     if position is not None:
-                        roster.loc[position, tm] = player_name
-                        rostered_players[tm].add(player_name)
-    
-    return roster
+                        roster.loc[position, tm] = pid
 
-
-def WORKS_build_roster(n_teams, owner_list, df, pos_order):
-    roster = pd.DataFrame(index=['C', '1B', '2B', '3B', 'SS', 'MI', 'CI', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 
-                             'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10'], data=np.zeros((33,n_teams)), columns=owner_list)
-    for tm in owner_list:
-        for i, row in df[df['Owner']==tm][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].sort_values("Timestamp").iterrows():
-            if row['Paid']==0:
-                print(df.loc[i]['Name'], 'B'+str(int(row['Supp'])))
-                roster.loc['B'+str(int(row['Supp'])),tm] = row['Name']
-                #fu.check_roster_pos(df.loc[i][cols].to_dict(), roster, df, 'B'+str(int(df.loc[i]['Supp'])), pos_order)
-            else:
-                if row['Paid'] > 0:
-                    # Send info to check_roster_pos: Name, Owner, Primary_Pos, Eligible Pos list
-                    #print(row['Name'], row['Timestamp'])
-                    results = fu.check_roster_pos(row[['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict(), roster, df, pos_order)
-                    print(results)
-                    for result in results:
-                        for item in result.items():
-                            if item[1] != None:
-                                roster.loc[item[1],tm] = item[0]
-    return roster
+    # Convert cbsids to player names for display
+    return fu.roster_cbsid_to_names(roster, df)
 
 
 app = FastAPI()

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import math
+from collections import deque
 from datetime import datetime
 import re
 import requests
@@ -684,39 +685,6 @@ def owners(conv, n_teams=12, tm_players=23):
 
 
 
-def OLD_check_roster_pos(roster, name, team_name, pos, eligible):
-    eligible_at = eligible.split('/')
-    eligibility = []
-    for p in eligible.split('/'):
-        if p=='C':
-            eligibility.extend(['C'])
-        if p=='1B':
-            eligibility.extend(['1B', 'CI'])
-        if p=='2B':
-            eligibility.extend(['2B', 'MI'])
-        if p=='3B':
-            eligibility.extend(['3B', 'CI'])
-        if p=='SS':
-            eligibility.extend(['SS', 'MI'])
-        if p=='OF':
-            eligibility.extend(['OF1', 'OF2', 'OF3', 'OF4', 'OF5'])
-        if p in ['SP', 'RP']:
-            eligibility.extend(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'])
-        if p in ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']:
-            eligibility.extend([p])
-        
-    eligibility = list(dict.fromkeys(eligibility))
-    if 'SP' in eligible_at or 'RP' in eligible_at: 
-        pos_list = eligibility
-    else:
-        pos_list = eligibility+['DH1', 'DH2']
-    for p in pos_list:
-        if roster.loc[p, team_name]==0:
-            roster.loc[p, team_name] = name
-            return p
-    
-    return pos_list
-
 
 
 def next_closest_in_tier(df, pos, playerid):
@@ -830,198 +798,80 @@ def get_eligible_positions(pos, pos_order):
     return eligibility
 
 
-pos_order = ['C', 'MI', 'CI', 'DH1', 'DH2', '2B', '3B', 'SS', '1B', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
+pos_order = ['C', '2B', 'SS', '3B', '1B', 'OF1', 'OF2', 'OF3', 'OF4', 'OF5', 'MI', 'CI', 'DH1', 'DH2', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10']
 
-def check_roster_pos(player, roster, df, pos_order, is_draft_operation=False):
+def check_roster_pos(player, roster, df, pos_order):
     """
-    Place a player on the roster by finding a valid permutation of positions
-    """
-    print(f"Function called for: {player['Name']} (cbsid: {player['cbsid']})")
-    
-    # Skip duplicate processing only during draft operations, not during general roster building
-    if is_draft_operation:
-        # Check if this player is being processed for the first time in this draft operation
-        player_id = f"{player['cbsid']}_{player['Owner']}"
-        if hasattr(check_roster_pos, '_current_draft_player') and check_roster_pos._current_draft_player == player_id:
-            print(f"Skipping duplicate processing for: {player['Name']} during draft")
-            return []
-        check_roster_pos._current_draft_player = player_id
-    
-    # Check if this player is already on the roster
-    team_roster = roster[player['Owner']]
-    existing_players = team_roster[team_roster != 0].values
-    if player['Name'] in existing_players:
-        print(f"{player['Name']} is already on the roster, skipping re-rostering")
-        return []  # Return empty list to indicate no action needed
-    
-    eligibility = get_eligible_positions(player['Pos'], pos_order)
-    print(f"Eligible positions for {player['Name']}: {eligibility}")
-    
-    # Get current team roster
-    team_roster = roster[player['Owner']]
-    
-    # Find current players and their original positions
-    current_players = team_roster[team_roster != 0]
-    
-    # Get all current rostered positions
-    rostered_positions = current_players.index.tolist()
-    rostered_positions = [p.strip().upper() for p in rostered_positions]
-    print(f"Currently rostered positions for {player['Owner']}: {rostered_positions}")
-    
-    # First check rostered_positions for a free spot
-    for position in eligibility:
-        position = position.strip().upper()
-        print(f"Checking position: {position}")
-        if position not in rostered_positions:
-            print(f"Found free spot for {player['Name']} at {position}")
-            result = [{player['Name']: position}]
-            print(f"Returning: {result}")
-            return result
-            
-    print('No free spot found initially, looking for bumps')
-    
-    # Create a list of possible moves, sorted by optimal placement
-    possible_moves = []
-    
-    # Loop through the drafted player's eligible positions
-    for p in eligibility:
-        # Find name of player currently in each roster spot
-        used_pos_player_name = roster.loc[p, player['Owner']]
-        
-        # Skip empty spots (should be caught above, but just in case)
-        if used_pos_player_name == 0 or not used_pos_player_name:
-            print(f"Position {p} is actually free, assigning {player['Name']}")
-            return [{player['Name']: p}]
-            
-        # Find the other positions this player could potentially move to
-        player_pos_data = df[df['Name'] == used_pos_player_name]['Pos']
-        if player_pos_data.empty:
-            print(f"Warning: Could not find position data for {used_pos_player_name}")
-            continue
-            
-        used_pos_player_positions = get_eligible_positions(player_pos_data.iloc[0], pos_order)
-        print(f"{p} is currently used by {used_pos_player_name}. {used_pos_player_name} is also eligible at {used_pos_player_positions}")
-        
-        # Calculate versatility (number of positions a player can play)
-        current_player_versatility = len(used_pos_player_positions)
-        new_player_versatility = len(eligibility)
-        
-        # Loop through the already rostered player's eligible positions
-        for p2 in used_pos_player_positions:
-            p2 = p2.strip().upper()
-            # If the rostered player can move to an open position
-            if p2 not in rostered_positions:
-                # Add this move to possible moves with score based on versatility difference
-                # Higher score = better move (player with more positions should be in more flexible spot)
-                score = current_player_versatility - new_player_versatility
-                possible_moves.append({
-                    'score': score,
-                    'move': [{player['Name']: p}, {used_pos_player_name: p2}]
-                })
-    
-    # Sort possible moves by score (highest first)
-    possible_moves.sort(key=lambda x: x['score'], reverse=True)
-    
-    # If we found any possible moves, return the best one
-    if possible_moves:
-        best_move = possible_moves[0]['move']
-        print(f"Best move found: {best_move}")
-        return best_move
-    
-    print(f'Unable to roster {player["Name"]}')
-    return [{player['Name']: None}]
+    Place a player on the roster using BFS to find the shortest chain of moves.
+    Roster stores cbsids (0 = empty). Uses cbsid for all lookups.
 
-
-def WORKS_check_roster_pos(player, roster, df, pos_order, is_draft_operation=False):
-    """
-    Place a player on the roster by finding a valid permutation of positions
-    
     Args:
-    roster: DataFrame with index of all possible positions
-    name: str, player name
-    team_name: str, name of team drafting player
-    eligible: str, comma-separated positions the player is eligible to play
-    pos_order: list of positions sorted by the order to try to place the player
-    
-    Returns:
-    str or None: Assigned position, or None if no placement possible
-    """
-    print(f"Function called for: {player['Name']} (cbsid: {player['cbsid']})")
+        player: dict with at least 'cbsid', 'Pos', 'Owner'
+        roster: DataFrame with position index, team columns, storing cbsids (0 = empty)
+        df: Full player DataFrame for looking up position eligibility by cbsid
+        pos_order: List defining position priority order
 
-    # Skip duplicate processing only during draft operations, not during general roster building
-    if is_draft_operation:
-        # Check if this player is being processed for the first time in this draft operation
-        player_id = f"{player['cbsid']}_{player['Owner']}"
-        if hasattr(check_roster_pos, '_current_draft_player') and check_roster_pos._current_draft_player == player_id:
-            print(f"Skipping duplicate processing for: {player['Name']} during draft")
-            return []
-        check_roster_pos._current_draft_player = player_id
+    Returns:
+        List of {cbsid: position} dicts representing moves to make,
+        or [{cbsid: None}] if placement is impossible,
+        or [] if the player is already rostered.
+    """
+    player_cbsid = int(player['cbsid'])
+    owner = player['Owner']
+    team_roster = roster[owner]
+
+    # Already on roster — nothing to do
+    if player_cbsid in team_roster.values:
+        return []
 
     eligibility = get_eligible_positions(player['Pos'], pos_order)
-    print(f"Eligible positions for {player['Name']}: {eligibility}")
-    
-    # Get current team roster
-    team_roster = roster[player['Owner']]
-    
-    # Find current players and their original positions
-    current_players = team_roster[team_roster != 0]
-    
-    # Get all current rostered positions
-    rostered_positions = current_players.index.tolist()
-    rostered_positions = [p.strip().upper() for p in rostered_positions]
 
-    # Combine current players with new player
-    #all_players = list(current_players.values) + [name]
-    print(f"Function called for: {player['Name']}")
-    # First check rostered_positions for a free spot
-    for position in eligibility:
-        position = position.strip().upper()
-        #print(f"Checking position: {position}")
-        if position not in rostered_positions:
-            #roster.loc[position, player['Owner']] = player['Name']
-            # End function looping b/c we found a place to put the player
-            print(f"Found free spot for {player['Name']} at {position}")
-            result = [{player['Name']: position}]
-            print(f"About to return: {result}")
-            return result
-        
-    print("No eligible positions found, function is ending without return.")
+    # BFS — each queue entry is (position_to_check, move_chain)
+    # move_chain is a list of (cbsid, target_position) tuples
+    queue = deque()
+    visited = set()
 
-    # Loop through the drafted player's eligible positions
-    #bump = False
-    for p in eligibility:
-        # Find name of player currently in each roster spot
-        used_pos_player_name = roster.loc[p, player['Owner']]
+    # Seed queue with the new player's eligible positions
+    for pos in eligibility:
+        if team_roster[pos] == 0:
+            # Open spot — place directly, no bumps needed
+            return [{player_cbsid: pos}]
+        if pos not in visited:
+            visited.add(pos)
+            queue.append((pos, [(player_cbsid, pos)]))
 
-        # Skip empty spots (should be caught above, but just in case)
-        if used_pos_player_name == 0 or not used_pos_player_name:
-            print(f"Position {p} is actually free, assigning {player['Name']}")
-            return [{player['Name']: p}]
-        
-        # Find the other positions this player could potentially move to
-        player_pos_data = df[df['Name'] == used_pos_player_name]['Pos']
-        if player_pos_data.empty:
-            print(f"Warning: Could not find position data for {used_pos_player_name}")
+    while queue:
+        pos, moves = queue.popleft()
+
+        # Who currently occupies this position?
+        occupant_cbsid = int(team_roster[pos])
+        if occupant_cbsid == 0:
+            # Open spot found at the end of the chain
+            return [{cid: p} for cid, p in moves]
+
+        # Look up occupant's eligible positions by cbsid
+        occupant_row = df[df['cbsid'] == occupant_cbsid]
+        if occupant_row.empty:
             continue
 
-        # Find the other positions this player could potentially move to
-        used_pos_player_positions = get_eligible_positions(df[df['Name']==used_pos_player_name]['Pos'].iloc[0], pos_order)
-        print(f"{p} is currently used by {used_pos_player_name}. {used_pos_player_name} is also eligible at {used_pos_player_positions}")
-        # Loop through the already rostered player's eligible positions
-        for p2 in used_pos_player_positions:
-            p2 = p2.strip().upper()
-            # If the rostered player can move to an open position, put him there and put the newly drafted player in his spot
-            if p2 not in rostered_positions:
-                print(f"{used_pos_player_name} is eligible to move to {p2}. Moving {used_pos_player_name} to {p2}. Rostering {player['Name']} in {p}")
-                #roster.loc[p2, player['Owner']] = used_pos_player_name
-                #roster.loc[p, player['Owner']] = player['Name']
-                # Set bump to True
-                #bump = True
-                print(f"{used_pos_player_name} is eligible to move to {p2}. Moving {used_pos_player_name} to {p2}. Rostering {player['Name']} in {p}")
-                # Get out of the loop now that we found someone who can move
-                return [{player['Name']:p}, {used_pos_player_name:p2}]
-    
-    print(f'Unable to roster {player["Name"]}')
-    return [{player['Name']:None}]
-        
+        occupant_eligible = get_eligible_positions(occupant_row.iloc[0]['Pos'], pos_order)
+
+        for alt_pos in occupant_eligible:
+            if alt_pos in visited:
+                continue
+            visited.add(alt_pos)
+            new_moves = moves + [(occupant_cbsid, alt_pos)]
+            if team_roster[alt_pos] == 0:
+                # Chain complete — open spot at the end
+                return [{cid: p} for cid, p in new_moves]
+            queue.append((alt_pos, new_moves))
+
+    # No valid placement found
+    return [{player_cbsid: None}]
+
+
+def roster_cbsid_to_names(roster, df):
+    """Convert a roster DataFrame of cbsids to player names for display."""
+    id_to_name = dict(zip(df['cbsid'].astype(int), df['Name']))
+    return roster.map(lambda x: id_to_name.get(int(x), '') if x != 0 else '')
 
