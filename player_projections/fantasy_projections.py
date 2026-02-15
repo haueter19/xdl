@@ -170,6 +170,11 @@ class FantasyProjections:
             z_column='z'  # Use adjusted z-scores
         )
 
+        draft_values['Owner'] = None
+        draft_values['Paid'] = 0
+        draft_values['Supp'] = 0
+        draft_values['Timestamp'] = None
+        draft_values['Keeper'] = 0
         self.draft_values = draft_values  # Save for later reference
         
         # Save conversion factor for later reference
@@ -789,6 +794,10 @@ class FantasyProjections:
         # Calculate SvHld if components exist
         if 'SvHld' not in df.columns and all(col in df.columns for col in ['SV', 'HLD']):
             df['SvHld'] = df['SV'] + df['HLD']
+
+        # Calculate total outs
+        if all(col in df.columns for col in ['IP']):
+            df.loc[df['IP'] >= 0, 'Outs'] = df.loc[df['IP'] >= 0, 'IP'].apply(lambda x: round(float(x) * 3, 0))
         
         # Determine position (SP vs RP)
         if 'Pos' in df.columns:
@@ -1412,10 +1421,10 @@ class FantasyProjections:
             raise ValueError("No data to save. Run generate_auction_values() first.")
         
         if db_path is None:
-            db_path = self.data_dir / 'fantasy_data.db'
-        
-        engine = create_engine(f'sqlite:///{db_path}')
-        
+            engine = self.engine
+        else:
+            engine = create_engine(f'sqlite:///{db_path}')
+
         self.draft_values.to_sql(
             f'{table_name}{self.year}',
             engine,
@@ -1424,6 +1433,7 @@ class FantasyProjections:
         )
         
         logger.info(f"Saved {len(self.draft_values)} rows to {table_name}{self.year}")
+        print(f"Saved {len(self.draft_values)} rows to {table_name}{self.year} in database {db_path}")
     
     def get_top_players(self, n: int = 20, position: Optional[str] = None) -> pd.DataFrame:
         """
