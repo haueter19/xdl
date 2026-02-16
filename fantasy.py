@@ -378,7 +378,7 @@ STAT_COLS = ['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'QS', 'SO', 'Sv+Hld', 
 
 
 def load_roster_data():
-    yr = datetime.now().year
+    yr = datetime.now().year-1
     wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week'] - 1
     df = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
                     CASE WHEN e.DH>=5 THEN 'h' ELSE 'p' END As type \
