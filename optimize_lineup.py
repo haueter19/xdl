@@ -1,6 +1,6 @@
 import ast
 import warnings
-from pulp import LpProblem, LpMaximize, LpVariable, LpStatus, lpSum, value, PULP_CBC_CMD
+from pulp import LpProblem, LpMaximize, LpMinimize, LpVariable, LpStatus, lpSum, value, PULP_CBC_CMD
 from typing import List, Dict, Optional
 
 class Optimized_Lineups:
@@ -31,12 +31,13 @@ class Optimized_Lineups:
 
     def __init__(self, owner, data, optimize_col='z',
                  player_col='Player', pos_col='all_pos',
-                 owner_col='Owner', type_col='type'):
+                 owner_col='Owner', type_col='type', maximize=True):
         self.owner: str = owner
         self.player_col: Optional[str] = player_col
         self.pos_col: Optional[str] = pos_col
         self.owner_col: Optional[str] = owner_col
         self.type_col: Optional[str] = type_col
+        self.maximize: bool = maximize
 
         # Normalise optimize_col to a list internally; keep the original for compat
         self.optimize_col: str = optimize_col if isinstance(optimize_col, str) else optimize_col[0]
@@ -109,7 +110,7 @@ class Optimized_Lineups:
     # ILP solver
     # ------------------------------------------------------------------
 
-    def _solve_ilp(self, player_dict: dict, slots: list) -> tuple[dict, int] | tuple[None, int]:
+    def _solve_ilp(self, player_dict: dict, slots: list, max: bool = True) -> tuple[dict, int] | tuple[None, int]:
         """
         Assign players to slots via lexicographic ILP optimisation.
 
@@ -137,7 +138,7 @@ class Optimized_Lineups:
         locked = []
 
         for col in self._optimize_cols:
-            prob = LpProblem("lineup", LpMaximize)
+            prob = LpProblem("lineup", LpMaximize if max else LpMinimize)
 
             x = {
                 i: {s: LpVariable(f"x_{i}_{s}", cat='Binary')
@@ -232,7 +233,7 @@ class Optimized_Lineups:
         sorted_pitchers = sorted(
             self.p_dict,
             key=lambda p: tuple(self.p_dict[p][c] for c in self._optimize_cols),
-            reverse=True,
+            reverse=self.maximize,
         )
         lineup = sorted_pitchers[:9]
         self.pitcher_optimized_lineup = {
@@ -250,7 +251,7 @@ class Optimized_Lineups:
         (C, 1B, 2B, 3B, SS, MI, CI, OF×5, DH×2) that maximises the
         total score, respecting all position-eligibility constraints.
         """
-        assignment, status = self._solve_ilp(self.h_dict, self.HITTER_SLOTS)
+        assignment, status = self._solve_ilp(self.h_dict, self.HITTER_SLOTS, self.maximize)
         if assignment is None:
             self._warn_infeasible('hitter', self.h_dict, self.HITTER_SLOTS, status)
             self.hitter_optimized_lineup = {}
