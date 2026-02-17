@@ -300,7 +300,7 @@ class FantasyProjections:
         logger.info(f"Using {period_name or 'this period'} as its own baseline")
         
         # Set as current qualifiers
-        period_qualifiers = self.calculate_qualifiers(...)
+        #period_qualifiers = self.calculate_qualifiers(...)
         self.qualifiers = period_qualifiers  # Set for calculate_z_scores()
         
         # Calculate z-scores (NO positional adjustment)
@@ -662,7 +662,7 @@ class FantasyProjections:
             DataFrame with averaged projections
         """
         # Columns that identify the player (don't average)
-        id_cols = ['cbsid', 'playerid', 'Name', 'Team', 'Pos']
+        id_cols = ['cbsid', 'playerid', 'CBSNAME', 'Name', 'Team', 'Pos']
         
         # Find all numeric columns
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -682,7 +682,8 @@ class FantasyProjections:
                        .first())
         
         result = averaged.merge(player_info, on=id_col, how='left')
-        
+        result.fillna({'Name': result['CBSNAME']}, inplace=True)
+        result.drop(columns=['CBSNAME'], inplace=True, errors='ignore')
         return result
     
     def add_last_year_suffix(
