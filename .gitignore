@@ -7,6 +7,6 @@ __pycache__
 *.ipynb_checkpoints
 .env
 *.png
-*.ipynb
+
 anaconda_projects\db\project_filebrowser.db
 *.xlsx
