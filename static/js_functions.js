@@ -277,50 +277,6 @@ $.fn.update_player_stats_window = function(selected_index){
 
 }
 
-$.fn.create_radar_chart = function(selected){
-    $("#projected_stats_table tr").hide();
-    $("#projected_stats_table tr:first").show();
-    $("#statcast_stats_table tr").hide();
-    $("#statcast_stats_table tr:first").show();
-    $("#"+selected).show();
-    $("#"+selected+'_sc').show();
-    $.each(data, function(i, v) {
-            if (v.cbsid == selected) {
-                selected_index = i
-                return;
-            }
-        });
-    $.fn.update_player_stats_window(selected_index);
-    $("#radar_chart_player_name").text(data[selected_index]['Name']);
-    let position = data[selected_index]['Primary_Pos'];
-    if ((position == 'SP') | (position =='RP')){
-        radar_data = [{
-            type: 'scatterpolar',
-            r: [data[selected_index]['zERA'], data[selected_index]['zWHIP'], data[selected_index]['zQS'], data[selected_index]['zSO'], data[selected_index]['zSvHld'], data[selected_index]['zERA']],
-            theta: ['ERA','WHIP','QS', 'SO', 'SvHld', 'ERA'],
-            fill: 'toself'
-            }]
-    } else {
-        radar_data = [{
-            type: 'scatterpolar',
-            r: [data[selected_index]['zBA'], data[selected_index]['zHR'], data[selected_index]['zR'], data[selected_index]['zRBI'], data[selected_index]['zSB'], data[selected_index]['zBA']],
-            theta: ['BA','HR','R', 'RBI', 'SB', 'BA'],
-            fill: 'toself'
-            }]
-    }
-    layout = {
-        height: 300,
-        polar: {
-            radialaxis: {
-            visible: true,
-            range: [-3, 3]
-            },
-        margin: { l:0, r:0, t:0, b:0, pad:0}
-    },
-    showlegend: false
-    }
-    Plotly.newPlot("radar_chart", radar_data, layout, {displayModeBar: false})
-}
 
 function bid_amounts(id){
     const val = get_val_from_id(id);
@@ -358,10 +314,6 @@ $(document).ready(function(){
     t +=  `</div>`
     el.html(t)
 
-    $("#projected_stats_table tr").hide();
-    $("#projected_stats_table tr:first").show();
-    $("#statcast_stats_table tr").hide();
-    $("#statcast_stats_table tr:first").show();
     $.fn.z_players();
     $.fn.owners_chart('Owner', '$ Left');
     $.fn.tiers();
@@ -369,8 +321,10 @@ $(document).ready(function(){
     
     $("input[name='cbsid']").on('focusout', function(e){
         var selected = $(this).val();
-        //$(this).create_radar_chart(selected);
         bid_amounts(selected);
+        $.each(data, function(i, v) {
+            if (v.cbsid == selected) { $.fn.update_player_stats_window(i); return false; }
+        });
         
         $.get("/draft/sims/"+selected, function(resp, status){
             //alert("Data: " + resp + "\nStatus: " + status);
@@ -490,11 +444,10 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.cbsid
-                $("#player_select").val(tr_id);
-                //$(this).create_radar_chart(tr_id);
-                bid_amounts(tr_id);
-                return tr_id;
+                $("#player_select").val(v.cbsid);
+                bid_amounts(v.cbsid);
+                $.fn.update_player_stats_window(i);
+                return false;
             }
         });
     });
@@ -502,11 +455,10 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.cbsid
-                $("#player_select").val(tr_id);
-                //$(this).create_radar_chart(tr_id);
-                bid_amounts(tr_id);
-                return tr_id;
+                $("#player_select").val(v.cbsid);
+                bid_amounts(v.cbsid);
+                $.fn.update_player_stats_window(i);
+                return false;
             }
         });
     });
@@ -514,11 +466,10 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.cbsid
-                $("#player_select").val(tr_id);
-                //$(this).create_radar_chart(tr_id);
-                bid_amounts(tr_id);
-                return tr_id;
+                $("#player_select").val(v.cbsid);
+                bid_amounts(v.cbsid);
+                $.fn.update_player_stats_window(i);
+                return false;
             }
         });
     });
@@ -526,28 +477,32 @@ $(document).ready(function(){
         var p_name = $(this).text();
         $.each(data, function(i, v) {
             if (v.Name == p_name) {
-                var tr_id = v.cbsid
-                $("#player_select").val(tr_id);
-                //$(this).create_radar_chart(tr_id);
-                bid_amounts(tr_id);
-                return tr_id;
+                $("#player_select").val(v.cbsid);
+                bid_amounts(v.cbsid);
+                $.fn.update_player_stats_window(i);
+                return false;
             }
         });
     });
     // Lima Time highlighting now handled by .my-team-row CSS class in the template
 
 
-    document.getElementById("z_players_chart").on('plotly_click', function(data){
-        var txt = data.points[0].text.split("<br>")
-        console.log(txt);
-        $("#player_select").val(txt[1].substring(4));
-        //$.fn.create_radar_chart(txt[1].substring(4));
-        bid_amounts(txt[1].substring(4));
+    document.getElementById("z_players_chart").on('plotly_click', function(eventData){
+        var txt = eventData.points[0].text.split("<br>")
+        var selected = txt[1].substring(4);
+        $("#player_select").val(selected);
+        bid_amounts(selected);
+        $.each(data, function(i, v) {
+            if (v.cbsid == selected) { $.fn.update_player_stats_window(i); return false; }
+        });
     });
-    document.getElementById("tiers_chart").on('plotly_click', function(data){
-        var txt = data.points[0].text.split("<br>")
-        $("#player_select").val(txt[1].substring(4));
-        //$.fn.create_radar_chart(txt[1].substring(4));
-        bid_amounts(txt[1].substring(4));
+    document.getElementById("tiers_chart").on('plotly_click', function(eventData){
+        var txt = eventData.points[0].text.split("<br>")
+        var selected = txt[1].substring(4);
+        $("#player_select").val(selected);
+        bid_amounts(selected);
+        $.each(data, function(i, v) {
+            if (v.cbsid == selected) { $.fn.update_player_stats_window(i); return false; }
+        });
     });
 })
