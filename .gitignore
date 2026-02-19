@@ -1,4 +1,4 @@
-*.csv
+/player_projections/data/*.csv
 *.pyc
 __pycache__
 /data
