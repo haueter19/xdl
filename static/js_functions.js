@@ -184,8 +184,8 @@ $.fn.update_player_stats_window = function(selected_index){
     +'<td>'+data[selected_index]['Dollars']+'</td>'
     +'<td>'+data[selected_index]['Value_ly']+'</td>'
     +'<td>'+data[selected_index]['z']+'</td>'
-    +'<td>'+data[selected_index]['Vol'].toFixed(2)+'</td>'
-    +'<td>'+data[selected_index]['Skew'].toFixed(2)+'</td>'
+    +'<td>'+ (data[selected_index]['Vol'] != null ? data[selected_index]['Vol'].toFixed(2) : 'N/A') +'</td>'
+    +'<td>'+ (data[selected_index]['Skew'] != null ? data[selected_index]['Skew'].toFixed(2) : 'N/A') +'</td>'
     +'</tr></table>'
     if ((data[selected_index]['Primary_Pos']=='SP') || (data[selected_index]['Primary_Pos']=='RP')){
         tbl_html += `<table class="table draft-table table-striped"><thead><tr><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>S+H</th>
@@ -197,7 +197,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SO']+'</td>'
         +'<td>'+data[selected_index]['QS']+'</td>'
         +'<td>'+data[selected_index]['SvHld']+'</td>'
-        +'</tr><tr><td>2024</td>'
+        +'</tr><tr><td>'+previousYear+'</td>'
         +'<td>'+(data[selected_index]['p_out_ly']/3).toFixed(1)+'</td>'
         +'<td>'+data[selected_index]['p_era_ly']+'</td>'
         +'<td>'+Number(data[selected_index]['p_whip_ly']).toFixed(2)+'</td>'
@@ -213,7 +213,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['exit_velocity_avg_ly']+'</td>'
         +'</tr>'
         // 2 years ago
-        +'<tr><td>2023</td>'
+        +'<tr><td>'+twoYearsAgo+'</td>'
         +'<td>'+(data[selected_index]['p_out_2ly']/3).toFixed(1)+'</td>'
         +'<td>'+data[selected_index]['p_era_2ly']+'</td>'
         +'<td>'+Number(data[selected_index]['p_whip_2ly']).toFixed(2)+'</td>'
@@ -232,14 +232,14 @@ $.fn.update_player_stats_window = function(selected_index){
         tbl_html += `<table class="table draft-table table-striped"><thead><tr><th>Type</th><th>PA</th><th>wOBAdiff</th><th>xBA</th><th>BA</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th>
         <th>Brl%</th><th>EV</th><th>Spd</th><th>Whiff%</th><th>wRC+</th></tr></thead>`
         +'<tr><td>Proj</td>'
-        +'<td>'+data[selected_index]['PA'].toFixed(1)+'</td>'
+        +'<td>'+ (data[selected_index]['PA'] != null ? data[selected_index]['PA'].toFixed(1) : 'N/A')+'</td>'
         +'<td>-</td><td>-</td>'
         +'<td>'+data[selected_index]['BA']+'</td>'
         +'<td>'+data[selected_index]['HR']+'</td>'
         +'<td>'+data[selected_index]['SB']+'</td>'
         +'<td>'+data[selected_index]['R']+'</td>'
         +'<td>'+data[selected_index]['RBI']+'</td>'
-        +'</tr><tr><td>2024</td>'
+        +'</tr><tr><td>'+previousYear+'</td>'
         +'<td>'+data[selected_index]['pa_ly']+'</td>'
         +'<td>'+data[selected_index]['woba_diff_ly']+'</td>'
         +'<td>'+data[selected_index]['xba_ly']+'</td>'
@@ -251,10 +251,10 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['barrel_batted_rate_ly']+'</td>'
         +'<td>'+data[selected_index]['exit_velocity_avg_ly']+'</td>'
         +'<td>'+data[selected_index]['sprint_speed_ly']+'</td>'
-        +'<td>'+data[selected_index]['whiff_percent_ly']+'</td>'
-        +'<td>'+data[selected_index]['wRC+'].toFixed(0)+'</td>'
+        +'<td>'+data[selected_index]['whiff_percent_ly']+'%</td>'
+        +'<td>'+ (data[selected_index]['wRC+'] != null ? data[selected_index]['wRC+'].toFixed(0) : 'N/A')+'</td>'
         // 2 years ago
-        +'</tr><tr><td>2023</td>'
+        +'</tr><tr><td>'+twoYearsAgo+'</td>'
         +'<td>'+data[selected_index]['pa_2ly']+'</td>'
         +'<td>'+data[selected_index]['woba_diff_2ly']+'</td>'
         +'<td>'+data[selected_index]['xba_2ly']+'</td>'
@@ -332,8 +332,12 @@ function bid_amounts(id){
 }
 
 var lastBidResult = null;
+const previousYear = new Date().getFullYear() - 1;
+const twoYearsAgo = new Date().getFullYear() - 2;
 
 $(document).ready(function(){
+    
+
     if (redirectStatus =='unrosterable'){
         alert('Unable to roster last drafted player')
     }
