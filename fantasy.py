@@ -536,8 +536,7 @@ async def search_players(cbsid: Optional[str] = None, name: Optional[str] = None
         return []
     where = " AND ".join(conditions)
     df = pd.read_sql(text(f"SELECT * FROM players WHERE {where} LIMIT 50"), engine, params=params)
-    df = df.where(pd.notnull(df), other=None)
-    return df.to_dict(orient='records')
+    return json.loads(df.to_json(orient='records'))
 
 
 @app.put('/admin/players/{cbsid}')
