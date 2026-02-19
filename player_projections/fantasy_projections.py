@@ -222,13 +222,17 @@ class FantasyProjections:
         print("=" * 60)
 
         if self.draft_qualifiers is None:
-            raise ValueError(
-                "Must run generate_auction_values() first to establish baseline. "
-                "Or manually set self.draft_qualifiers."
-            )
+            # Load previous season data if not provided    
+            previous_hitting = self.load_previous_season_stats('hitting')
+            previous_pitching = self.load_previous_season_stats('pitching')
+            
+            # Calculate qualifiers from PREVIOUS season
+            qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
+            self.draft_qualifiers = qualifiers  # Save for later comparison
+        else:
+            # Use SAME qualifiers as draft (previous season)
+            self.qualifiers = self.draft_qualifiers
         
-        # Use SAME qualifiers as draft (previous season)
-        self.qualifiers = self.draft_qualifiers
         logger.info(f"Using {self.year - 1} season as baseline (same as draft)")
         print(f"Using {self.year - 1} season as baseline (same as draft)")
         
@@ -878,10 +882,31 @@ class FantasyProjections:
                 merge_cols = ['cbsid'] + [c for c in prev.columns if c.endswith('_ly')]
                 df = df.merge(prev[merge_cols], on='cbsid', how='left')
                 logger.info(f"Merged {self.year - 1} stats")
+                print(f"Merged {self.year - 1} stats")
             except Exception as e:
                 logger.warning(f"Could not merge previous season stats: {e}")
                 print(f"Could not merge previous season stats: {e}")
         
+        # Try 2 seasons prior stats for comparison
+        prev_path2 = self.data_dir / f"{self.year - 2}-final-stats-{suffix}.csv"
+        if prev_path2.exists():
+            try:
+                prev2 = pd.read_csv(prev_path2, encoding='latin-1')
+                prev2 = self.standardize_columns(prev2, player_type)
+                prev2 = self.add_last_year_suffix(prev2)
+                
+                # Only merge columns that don't already exist
+                merge_cols = ['cbsid'] + [c for c in prev2.columns if c.endswith('_2ly')]
+                df = df.merge(prev2[merge_cols], on='cbsid', how='left')
+                logger.info(f"Merged {self.year - 2} stats")
+                print(f"Merged {self.year - 2} stats")
+            except Exception as e:
+                logger.warning(f"Could not merge previous season stats: {e}")
+                print(f"Could not merge {self.year-2} season stats: {e}")
+        else:
+            logger.info(f"No stats found for {self.year - 2} to merge")
+            print(f"No stats found for {self.year - 2} to merge")
+            
         return df
     
     # ========================================================================
