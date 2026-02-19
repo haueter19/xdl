@@ -556,3 +556,424 @@ async def update_player(cbsid: int, update: PlayerUpdate):
         conn.execute(text(f"UPDATE players SET {', '.join(set_parts)} WHERE cbsid = :cbsid"), params)
         conn.commit()
     return {'status': 'ok', 'updated': list(update.data.keys())}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SEASON ANALYSIS
+# ─────────────────────────────────────────────────────────────────────────────
+import ast as _ast
+
+_analysis_cache: dict = {}
+ANALYSIS_YEARS = [2025, 2024, 2023]
+_ANALYSIS_DEFAULT_YEAR = datetime.now().year - 1
+
+_ANALYSIS_HITTER_POS = {'C', '1B', '2B', '3B', 'SS', 'OF', 'DH', 'MI', 'CI'}
+_ANALYSIS_N_TEAMS    = 12
+_ANALYSIS_TM_DOLLARS = 260
+_ANALYSIS_REPL_H     = _ANALYSIS_N_TEAMS * 14   # 168
+_ANALYSIS_REPL_P     = _ANALYSIS_N_TEAMS * 9    # 108
+
+# Short name (as stored in players20XX.Owner) → owner_id
+_PNAME_TO_OID: dict[int, dict] = {
+    2025: {
+        '9 Grand Kids': 30, 'Brewbirds': 3,  'Charmer': 36, 'Dirty Birds': 41,
+        'Harvey': 4,        'Lima Time': 38, 'Mother': 47,  'Roid Ragers': 44,
+        'Trouble': 1,       'Ugly Spuds': 29,'Wu-Tang': 42, 'Young Guns': 45,
+    },
+    2024: {
+        'Brewbirds': 3,  'Charmer': 36,  'Dirty Birds': 41, 'Harvey': 4,
+        'Lima Time': 38, 'Madness': 30,  'Mother': 47,      'Roid Ragers': 44,
+        'Trouble': 1,    'Ugly Spuds': 29,'Wu-Tang': 42,    'Young Guns': 45,
+    },
+    2023: {
+        'Brewbirds': 3,  'Charmer': 36,  'Dirty Birds': 41, 'Harvey': 4,
+        'Lil Trump': 27, 'Lima Time': 38, 'Midnight': 30,   'Roid Ragers': 44,
+        'Trouble': 1,    'Ugly Spuds': 29,'Wu-Tang': 42,    'Young Guns': 45,
+    },
+}
+
+# CSV owner names → owner_id (for 2025 adds/trades CSVs)
+_CSV_TO_OID_2025 = {
+    '9 Grand Kids': 30,           'Brewbirds': 3,            'Charmer': 36,
+    'Dirty Birds': 41,            'Harveys Wallbangers': 4,
+    'Lil Trumps Wiscompton Wu-Tang': 42,  'Wiscompton Wu-Tang': 42,
+    'Lima Time!': 38,             "Mom's Cookin": 47,
+    'Roid Ragers': 44,            'Trouble With The Curve': 1,
+    'Trouble with the Curve': 1,  'Ugly Spuds': 29, 'Young Guns': 45,
+}
+
+# Full canonical name → owner_id (for trades_2023.json partner names)
+_FULLNAME_TO_OID = {
+    '9 Grand Kids': 30,            'Brewbirds': 3,
+    'Charmer': 36,                 'Dirty Birds': 41,
+    'Harveys Wallbangers': 4,      'Lil Trump & the Ivanabees': 27,
+    'Lima Time!': 38,              "Mom's Cookin": 47,
+    'Roid Ragers': 44,             'Trouble with the Curve': 1,
+    'Wiscompton Wu-Tang': 42,      'Young Guns': 45,
+}
+
+
+def _load_players_year(year: int) -> pd.DataFrame:
+    """Return players20XX with normalized columns and resolved cbsid."""
+    HPOS = _ANALYSIS_HITTER_POS
+    if year == 2025:
+        df = pd.read_sql("""
+            SELECT CAST(cbsid AS INT) cbsid, Name, COALESCE(Pos,'') Pos,
+                   Primary_Pos, z, Value, Owner,
+                   COALESCE(Paid,0) Paid, COALESCE(Supp,0) Supp,
+                   COALESCE(AB,0) AB, COALESCE(R,0) R, COALESCE(HR,0) HR,
+                   COALESCE(RBI,0) RBI, COALESCE(SB,0) SB, COALESCE(H,0) H,
+                   COALESCE(IP,0) IP, COALESCE(ERA,0) ERA, COALESCE(WHIP,0) WHIP,
+                   COALESCE(SO,0) SO, COALESCE(QS,0) QS, COALESCE(SvHld,0) SvHld,
+                   COALESCE(ER,0) ER, COALESCE(HA,0) HA, COALESCE(BB,0) BB
+            FROM players2025""", engine)
+    else:
+        raw = pd.read_sql(f"SELECT * FROM players{year}", engine)
+        name_cbsid = pd.read_sql(
+            "SELECT CAST(cbsid AS BIGINT) cbsid, CBSNAME FROM players", engine)
+        raw = raw.merge(name_cbsid, left_on='Name', right_on='CBSNAME', how='left')
+        if 'Sv+Hld' in raw.columns:
+            raw.rename(columns={'Sv+Hld': 'SvHld'}, inplace=True)
+        if 'Supp' not in raw.columns:
+            raw['Supp'] = 0
+        # 2023 uses Wins (W) not Quality Starts; map W→QS for uniform handling
+        if 'QS' not in raw.columns:
+            raw['QS'] = raw.get('W', pd.Series(0, index=raw.index)).fillna(0)
+        for col in ['AB','R','HR','RBI','SB','H','IP','ERA','WHIP',
+                    'SO','QS','SvHld','ER','HA','BB','Paid','Supp']:
+            raw.setdefault(col, 0)
+            raw[col] = raw[col].fillna(0)
+        if 'Pos' not in raw.columns:
+            raw['Pos'] = raw.get('Primary_Pos', '')
+        raw['Pos'] = raw['Pos'].fillna('')
+        df = raw[['cbsid','Name','Pos','Primary_Pos','z','Value','Owner','Paid','Supp',
+                  'AB','R','HR','RBI','SB','H','IP','ERA','WHIP',
+                  'SO','QS','SvHld','ER','HA','BB']].copy()
+    df['cbsid'] = pd.to_numeric(df['cbsid'], errors='coerce')
+    df = df.dropna(subset=['cbsid'])
+    df['cbsid'] = df['cbsid'].astype(int)
+    df['ptype'] = df['Primary_Pos'].apply(
+        lambda x: 'h' if pd.notna(x) and x in HPOS else 'p')
+    return df
+
+
+def compute_analysis(year: int) -> dict:
+    """Full transaction analysis for one season. Results are in-memory cached."""
+    if year in _analysis_cache:
+        return _analysis_cache[year]
+
+    owners_tbl = pd.read_sql('SELECT owner_id, owner FROM owners', engine)
+    oid_to_name = dict(zip(owners_tbl['owner_id'], owners_tbl['owner']))
+    name_to_oid = _PNAME_TO_OID[year]
+
+    # ── Load players & build projected baseline ────────────────────────────
+    all_proj = _load_players_year(year)
+    h_proj = all_proj[(all_proj['ptype'] == 'h') & (all_proj['z'] > 0)].copy()
+    p_proj = all_proj[(all_proj['ptype'] == 'p') & (all_proj['z'] > 0)].copy()
+    h_proj['_BA']   = h_proj['H'] / h_proj['AB'].replace(0, np.nan)
+    p_proj['_ERA']  = p_proj['ER'] / p_proj['IP'].replace(0, np.nan) * 9
+    p_proj['_WHIP'] = (p_proj['HA'] + p_proj['BB']) / p_proj['IP'].replace(0, np.nan)
+
+    pmh  = {c: h_proj[c].mean()  for c in ['R','HR','RBI','SB']}
+    psh  = {c: max(h_proj[c].std(), 1e-6) for c in ['R','HR','RBI','SB']}
+    pba_m, pba_s = h_proj['H'].sum() / h_proj['AB'].sum(), max(h_proj['_BA'].std(), 1e-6)
+    avg_ab = h_proj['AB'].mean()
+
+    pmp   = {c: p_proj[c].mean()  for c in ['SO','QS','SvHld']}
+    psp   = {c: max(p_proj[c].std(), 1e-6) for c in ['SO','QS','SvHld']}
+    pera_m  = p_proj['ER'].sum() / p_proj['IP'].sum() * 9
+    pera_s  = max(p_proj['_ERA'].std(), 1e-6)
+    pwhip_m = (p_proj['HA'].sum() + p_proj['BB'].sum()) / p_proj['IP'].sum()
+    pwhip_s = max(p_proj['_WHIP'].std(), 1e-6)
+    avg_ip  = p_proj['IP'].mean()
+
+    def _raw_z(df: pd.DataFrame) -> pd.Series:
+        z   = pd.DataFrame(index=df.index, dtype=float)
+        pt  = df['ptype'].copy()
+        rec = (pt == 'p') & (df['IP'].fillna(0) < 5) & (df['AB'].fillna(0) >= 50)
+        pt[rec] = 'h'
+        hm, pm = pt == 'h', pt == 'p'
+        if hm.any():
+            hdf = df[hm]
+            for c in ['R','HR','RBI','SB']:
+                z.loc[hm, c] = (hdf[c] - pmh[c]) / psh[c]
+            ba = hdf['H'] / hdf['AB'].replace(0, np.nan)
+            z.loc[hm,'BA'] = (ba - pba_m) / pba_s * (hdf['AB'] / avg_ab)
+        if pm.any():
+            pdf = df[pm]
+            for c in ['SO','QS','SvHld']:
+                z.loc[pm, c] = (pdf[c] - pmp[c]) / psp[c]
+            era  = pdf['ER'] / pdf['IP'].replace(0, np.nan) * 9
+            z.loc[pm,'ERA']  = -(era  - pera_m)  / pera_s  * (pdf['IP'] / avg_ip)
+            whip = (pdf['Ha'] + pdf['BBa']) / pdf['IP'].replace(0, np.nan)
+            z.loc[pm,'WHIP'] = -(whip - pwhip_m) / pwhip_s * (pdf['IP'] / avg_ip)
+        return z.fillna(0).sum(axis=1)
+
+    # ── Season stats (W→QS for pre-2025) ──────────────────────────────────
+    raw_stats = pd.read_sql(
+        f"SELECT cbsid, week, R, RBI, HR, SB, H, AB, SO, SvHld, ER, Ha, BBa, "
+        f"IP, outs, COALESCE(QS,0) QS, COALESCE(W,0) W FROM stats WHERE year={year}", engine)
+    if year <= 2024:
+        raw_stats['QS'] = raw_stats['W']   # treat Wins as QS for pre-2025 years
+    SCOLS = ['R','RBI','HR','SB','H','AB','SO','SvHld','ER','Ha','BBa','IP','outs','QS']
+
+    p_meta = all_proj[['cbsid','Name','ptype']].drop_duplicates('cbsid')
+    st = raw_stats.groupby('cbsid')[SCOLS].sum(min_count=1).reset_index()
+    st = st.merge(p_meta, on='cbsid', how='left').fillna({'ptype': 'p'})
+    st['raw_z'] = _raw_z(st)
+
+    hz = st[st['ptype'] == 'h']['raw_z'].sort_values(ascending=False)
+    pz = st[st['ptype'] == 'p']['raw_z'].sort_values(ascending=False)
+    rl_h = hz.iloc[_ANALYSIS_REPL_H - 1] if len(hz) >= _ANALYSIS_REPL_H else float(hz.min())
+    rl_p = pz.iloc[_ANALYSIS_REPL_P - 1] if len(pz) >= _ANALYSIS_REPL_P else float(pz.min())
+    st['actual_z'] = st['raw_z'] - st['ptype'].map({'h': rl_h, 'p': rl_p}).fillna(rl_p)
+    pos_z = st[st['actual_z'] > 0]['actual_z'].sum()
+    conv  = _ANALYSIS_TM_DOLLARS * _ANALYSIS_N_TEAMS / pos_z
+    st['actual_value'] = (st['actual_z'] * conv).round(2)
+
+    # ── Roster + weeks-per-team ────────────────────────────────────────────
+    roster = pd.read_sql(
+        f"SELECT cbsid, owner_id, week FROM roster WHERE year={year}", engine)
+    first_wk = (roster.groupby(['cbsid','owner_id'])['week'].min()
+                .reset_index().rename(columns={'week': 'first_week'}))
+    wk = (roster.groupby(['cbsid','owner_id']).size().reset_index(name='weeks')
+          .merge(roster.groupby('cbsid')['week'].count().reset_index(name='total_weeks'),
+                 on='cbsid'))
+    wk['fraction'] = wk['weeks'] / wk['total_weeks']
+    wk = wk.merge(st[['cbsid','actual_value']], on='cbsid', how='left')
+    wk['team_value'] = (wk['actual_value'].fillna(0) * wk['fraction']).round(2)
+    wk = wk.merge(first_wk, on=['cbsid','owner_id'], how='left')
+
+    # ── Acquisition source classification ──────────────────────────────────
+    pname_map = (pd.read_sql("SELECT CAST(cbsid AS INT) cbsid, CBSNAME FROM players", engine)
+                 .drop_duplicates('CBSNAME'))
+
+    if year == 2025:
+        tr_csv = pd.read_csv('2025-trades.csv')
+        tr_csv['owner_id'] = tr_csv['owner'].map(_CSV_TO_OID_2025)
+        trade_recs = []
+        for _, row in tr_csv.iterrows():
+            if pd.isna(row['owner_id']):
+                continue
+            try:
+                for p in _ast.literal_eval(row['parsed_transactions']):
+                    trade_recs.append({'player_name': p['Name'],
+                                       'recv_oid': int(row['owner_id'])})
+            except Exception:
+                pass
+        tr_df = (pd.DataFrame(trade_recs)
+                 .merge(pname_map.rename(columns={'CBSNAME': 'player_name'}),
+                        on='player_name', how='left'))
+        traded_pairs = set(zip(tr_df['cbsid'].dropna().astype(int), tr_df['recv_oid']))
+
+        def _classify(cbsid, owner_id, fw):
+            if fw == 1: return 'Draft'
+            if (int(cbsid), int(owner_id)) in traded_pairs: return 'Trade'
+            return 'FA'
+        sources = ['Draft', 'FA', 'Trade']
+    else:
+        def _classify(cbsid, owner_id, fw):
+            return 'Draft' if fw == 1 else 'In-Season'
+        sources = ['Draft', 'In-Season']
+
+    wk['source'] = wk.apply(
+        lambda r: _classify(r['cbsid'], r['owner_id'], r['first_week']), axis=1)
+    wk['owner'] = wk['owner_id'].map(oid_to_name)
+
+    # ── Q1: Value by source ────────────────────────────────────────────────
+    q1_raw = wk.groupby(['owner','source'])['team_value'].sum().unstack(fill_value=0)
+    for s in sources:
+        if s not in q1_raw.columns:
+            q1_raw[s] = 0.0
+    q1_raw['Total'] = q1_raw[sources].sum(axis=1)
+    pos_denom = q1_raw[sources].clip(lower=0).sum(axis=1).replace(0, np.nan)
+    q1_out = []
+    for owner in q1_raw.index:
+        row = {'owner': owner, 'total': round(float(q1_raw.loc[owner,'Total']), 1)}
+        for s in sources:
+            val = float(q1_raw.loc[owner, s])
+            pct = (max(val, 0) / float(pos_denom[owner])
+                   if pd.notna(pos_denom[owner]) else 0) * 100
+            key = s.lower().replace('-','_').replace(' ','_')
+            row[key]          = round(val, 1)
+            row[f'{key}_pct'] = round(pct, 1)
+        q1_out.append(row)
+    q1_out.sort(key=lambda x: -x['total'])
+
+    # ── Q2: Trade winners ──────────────────────────────────────────────────
+    rs = roster.merge(raw_stats, on=['cbsid','week'], how='left')
+
+    def _player_post_value(cbsid: int, recv_oid: int, from_week: int) -> float:
+        mask = ((rs['cbsid'] == cbsid) & (rs['owner_id'] == recv_oid)
+                & (rs['week'] >= from_week))
+        if not mask.any():
+            return 0.0
+        ps   = rs[mask][SCOLS].sum()
+        pm   = p_meta[p_meta['cbsid'] == cbsid]
+        ptype = pm['ptype'].iloc[0] if len(pm) else 'p'
+        rdf   = pd.DataFrame([ps])
+        rdf['ptype'] = ptype
+        raw  = _raw_z(rdf).iloc[0]
+        shift = rl_h if ptype == 'h' else rl_p
+        return round((raw - shift) * conv, 1)
+
+    q2_out = None
+    if year == 2025:
+        tr_csv = pd.read_csv('2025-trades.csv')
+        tr_csv['owner_id'] = tr_csv['owner'].map(_CSV_TO_OID_2025)
+        events = []
+        for _, row in tr_csv.iterrows():
+            if pd.isna(row['owner_id']):
+                continue
+            try:
+                for p in _ast.literal_eval(row['parsed_transactions']):
+                    match = pname_map[pname_map['CBSNAME'] == p['Name']]
+                    cbsid_v = int(match['cbsid'].iloc[0]) if len(match) else None
+                    events.append({
+                        'effective': row['Effective'],
+                        'period':    int(row['period']),
+                        'recv_oid':  int(row['owner_id']),
+                        'send_name': p.get('Trade_Partner',''),
+                        'player':    p['Name'],
+                        'cbsid':     cbsid_v,
+                    })
+            except Exception:
+                pass
+        ev_df = pd.DataFrame(events).dropna(subset=['cbsid'])
+        ev_df['send_oid']  = ev_df['send_name'].map(_CSV_TO_OID_2025)
+        ev_df['team_pair'] = ev_df.apply(
+            lambda r: tuple(sorted([str(r['recv_oid']),
+                                    str(r.get('send_oid',''))])), axis=1)
+        unique_ev = (ev_df[['effective','period','team_pair']].drop_duplicates()
+                     .sort_values('effective').reset_index(drop=True))
+        q2_trades = []
+        for _, ut in unique_ev.iterrows():
+            mask = ((ev_df['effective'] == ut['effective'])
+                    & (ev_df['team_pair'] == ut['team_pair']))
+            by_recv: dict = {}
+            for _, tr in ev_df[mask].iterrows():
+                oid = tr['recv_oid']
+                by_recv.setdefault(oid, {'cbsids':[], 'period': tr['period'], 'players':[]})
+                if tr['cbsid']:
+                    by_recv[oid]['cbsids'].append(int(tr['cbsid']))
+                by_recv[oid]['players'].append(tr['player'])
+            if len(by_recv) < 2:
+                continue
+            sides = []
+            for oid, info in by_recv.items():
+                val = sum(_player_post_value(c, oid, info['period'])
+                          for c in info['cbsids'])
+                sides.append({'team': oid_to_name.get(oid, str(oid)),
+                              'players': ', '.join(info['players']),
+                              'value': round(val, 1)})
+            sides.sort(key=lambda x: -x['value'])
+            q2_trades.append({'date': ut['effective'],
+                              'winner': sides[0]['team'], 'sides': sides})
+        q2_out = q2_trades
+
+    elif year == 2023:
+        with open('trades_2023.json') as f:
+            t23 = json.load(f)
+        seen: dict = {}
+        for recv_name, trade_list in t23.items():
+            recv_oid = _FULLNAME_TO_OID.get(recv_name)
+            if recv_oid is None:
+                continue
+            for trade in trade_list:
+                week     = trade['week']
+                send_name = trade['partner']
+                send_oid  = _FULLNAME_TO_OID.get(send_name)
+                key = (week, frozenset([recv_oid, send_oid or 0]))
+                if key not in seen:
+                    seen[key] = {
+                        'week': week,
+                        'teams': {recv_oid: trade['received'],
+                                  send_oid: trade['traded']} if send_oid else
+                                 {recv_oid: trade['received']},
+                    }
+        q2_23 = []
+        for (week, _), evt in sorted(seen.items()):
+            sides = []
+            for recv_oid, cbsids in evt['teams'].items():
+                if recv_oid is None:
+                    continue
+                val = sum(_player_post_value(c, recv_oid, week) for c in cbsids)
+                names_list = []
+                for cid in cbsids:
+                    nm = p_meta[p_meta['cbsid'] == cid]
+                    names_list.append(nm['Name'].iloc[0] if len(nm) else str(cid))
+                sides.append({'team': oid_to_name.get(recv_oid, str(recv_oid)),
+                              'players': ', '.join(names_list),
+                              'value': round(val, 1)})
+            if len(sides) < 2:
+                continue
+            sides.sort(key=lambda x: -x['value'])
+            q2_23.append({'date': f'Week {week}',
+                          'winner': sides[0]['team'], 'sides': sides})
+        q2_out = q2_23
+
+    # ── Q3: Draft surplus ──────────────────────────────────────────────────
+    owned = all_proj[all_proj['Owner'].notna()].copy()
+    owned['owner_id'] = owned['Owner'].map(name_to_oid)
+    owned = owned.dropna(subset=['cbsid','owner_id'])
+    owned['cbsid']    = owned['cbsid'].astype(int)
+    owned['owner_id'] = owned['owner_id'].astype(int)
+
+    draft_vals = wk[wk['source'] == 'Draft'][['cbsid','owner_id','team_value']]
+    drafted = owned.merge(draft_vals, on=['cbsid','owner_id'], how='left')
+    drafted['team_value'] = drafted['team_value'].fillna(0)
+    drafted['surplus']    = (drafted['team_value'] - drafted['Paid']).round(1)
+    drafted['team_name']  = drafted['owner_id'].map(oid_to_name)
+    drafted['Pos']        = drafted.get('Pos', drafted.get('Primary_Pos', ''))
+
+    team_q3 = (drafted.groupby('team_name')
+               .agg(total_paid=('Paid','sum'), proj_value=('Value','sum'),
+                    act_value=('team_value','sum'), surplus=('surplus','sum'))
+               .round(1).reset_index()
+               .sort_values('surplus', ascending=False)
+               .to_dict(orient='records'))
+
+    auction = drafted[drafted['Paid'] > 0].copy()
+    def _to_records(df):
+        d = df.copy()
+        if 'Pos' not in d.columns:
+            d['Pos'] = d['Primary_Pos'].fillna('') if 'Primary_Pos' in d.columns else ''
+        return (d[['Name','team_name','Pos','Paid','team_value','surplus']]
+                .rename(columns={'team_name':'owner'}).round(1)
+                .to_dict(orient='records'))
+
+    result = {
+        'year':    year,
+        'sources': sources,
+        'conv':    round(conv, 2),
+        'q1':      q1_out,
+        'q2':      q2_out,
+        'q3': {
+            'teams':         team_q3,
+            'players_best':  _to_records(auction.nlargest(50, 'surplus')),
+            'players_worst': _to_records(auction.nsmallest(30, 'surplus')),
+            'all_players':   _to_records(auction),
+        },
+    }
+    _analysis_cache[year] = result
+    return result
+
+
+@app.get('/analysis', response_class=HTMLResponse)
+async def analysis_view(request: Request):
+    default_yr = min(_ANALYSIS_DEFAULT_YEAR, max(ANALYSIS_YEARS))
+    return templates.TemplateResponse(
+        'analysis.html',
+        {'request': request, 'years': ANALYSIS_YEARS, 'default_year': default_yr})
+
+
+@app.get('/analysis/data')
+async def analysis_data(year: int = 2025):
+    if year not in ANALYSIS_YEARS:
+        raise HTTPException(status_code=400, detail=f"Year must be one of {ANALYSIS_YEARS}")
+    try:
+        data = compute_analysis(year)
+        return json.loads(json.dumps(data, default=str))
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=traceback.format_exc())

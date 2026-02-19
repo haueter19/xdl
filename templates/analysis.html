@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+    <title>Season Analysis · XDL</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', path='/style.css') }}" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        .analysis-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: 20px 22px;
+        }
+        .analysis-card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        .analysis-card-desc {
+            font-size: 0.78rem;
+            color: var(--color-muted);
+            margin-bottom: 14px;
+        }
+        .year-btn {
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: #1e293b;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 5px 16px;
+            border-radius: 99px;
+            cursor: pointer;
+            transition: all 0.12s;
+        }
+        .year-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .year-btn.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+        .section-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--color-muted);
+            margin-bottom: 4px;
+        }
+        .trade-table { font-size: 0.78rem; }
+        .trade-table th {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: var(--color-muted);
+            font-weight: 600;
+            padding: 6px 8px;
+            background: var(--color-header-bg);
+        }
+        .trade-table td { padding: 7px 8px; vertical-align: top; }
+        .trade-table tr.winner-row td { background: #f0fdf4; }
+        .val-positive { color: var(--color-positive); font-weight: 600; }
+        .val-negative { color: var(--color-negative); }
+        .winner-badge {
+            font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+            padding: 2px 6px; border-radius: 99px;
+            background: var(--color-positive); color: #fff;
+            margin-left: 5px; vertical-align: middle;
+        }
+        .mini-table { font-size: 0.75rem; }
+        .mini-table th {
+            font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.3px;
+            color: var(--color-muted); font-weight: 600; padding: 4px 6px;
+            background: var(--color-header-bg);
+        }
+        .mini-table td { padding: 4px 6px; }
+        .no-data-msg {
+            text-align: center; padding: 40px;
+            color: var(--color-muted); font-size: 0.85rem;
+        }
+        #loading-overlay { padding: 80px 0; }
+    </style>
+</head>
+<body>
+<div class="container-xl py-4" style="max-width:1440px">
+
+    <!-- Header -->
+    <div class="d-flex align-items-center gap-3 mb-3">
+        <a href="/" class="text-decoration-none" style="color:var(--color-muted);font-size:.82rem">← Home</a>
+        <div>
+            <div style="font-size:1.25rem;font-weight:700;color:#1e293b;line-height:1.1">Season Analysis</div>
+            <div style="font-size:.78rem;color:var(--color-muted)">Draft · Free Agent · Trade performance by year</div>
+        </div>
+    </div>
+
+    <!-- Year selector -->
+    <div class="d-flex gap-2 mb-4">
+        {% for y in years %}
+        <button class="year-btn" data-year="{{ y }}">{{ y }}</button>
+        {% endfor %}
+    </div>
+
+    <!-- Loading -->
+    <div id="loading-overlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" style="width:2rem;height:2rem" role="status"></div>
+            <div class="text-muted mt-2" style="font-size:.82rem">Computing season statistics…</div>
+        </div>
+    </div>
+
+    <!-- Page content -->
+    <div id="page-content" style="display:none">
+
+        <!-- Q1: Value by Source -->
+        <div class="analysis-card mb-4">
+            <div class="section-label">Question 1</div>
+            <div class="analysis-card-title">Value by Acquisition Source</div>
+            <div class="analysis-card-desc">
+                How much of each team's season value came from the draft, free agent pickups, and trades?
+                Value is the actual z-score production shifted to replacement level and converted to dollars.
+                Each player's full-season value is pro-rated by weeks on each team.
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-8"><div id="q1-bar" style="height:340px"></div></div>
+                <div class="col-lg-4"><div id="q1-pct" style="height:340px"></div></div>
+            </div>
+        </div>
+
+        <!-- Q2: Trade Winners -->
+        <div class="analysis-card mb-4">
+            <div class="section-label">Question 2</div>
+            <div class="analysis-card-title">Trade Results</div>
+            <div class="analysis-card-desc">
+                Actual value received by each team post-trade, from the trade's effective week onward.
+                A positive value means the players produced above replacement-level.
+            </div>
+            <div id="q2-content"></div>
+        </div>
+
+        <!-- Q3: Draft Surplus -->
+        <div class="analysis-card mb-4">
+            <div class="section-label">Question 3</div>
+            <div class="analysis-card-title">Draft Surplus Value</div>
+            <div class="analysis-card-desc">
+                Auction surplus = actual value produced (while on original team) − price paid.
+                Snake picks cost $0, so any positive production is pure surplus.
+                Rate: <span id="q3-conv-label"></span>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-5"><div id="q3-teams" style="height:360px"></div></div>
+                <div class="col-lg-7"><div id="q3-scatter" style="height:360px"></div></div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-2" style="font-size:.8rem">Top Auction Bargains</div>
+                    <div id="q3-best-table"></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="fw-semibold mb-2" style="font-size:.8rem">Biggest Auction Busts</div>
+                    <div id="q3-worst-table"></div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /page-content -->
+</div><!-- /container -->
+
+<script>
+const SOURCE_COLORS = {
+    'Draft':     '#2196F3',
+    'FA':        '#4CAF50',
+    'Trade':     '#FF9800',
+    'In-Season': '#9C27B0',
+};
+const PLY_CONFIG = {displayModeBar: false};
+const PLY_LAYOUT_BASE = {
+    margin: {l:8, r:8, t:30, b:8},
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor:  'rgba(0,0,0,0)',
+    font: {family: 'system-ui, sans-serif', size: 11, color: '#374151'},
+};
+
+let _currentYear = null;
+
+/* ── Year selection ───────────────────────────────────────────────────── */
+document.querySelectorAll('.year-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectYear(parseInt(btn.dataset.year)));
+});
+
+async function selectYear(year) {
+    if (year === _currentYear) return;
+    _currentYear = year;
+    document.querySelectorAll('.year-btn').forEach(b =>
+        b.classList.toggle('active', parseInt(b.dataset.year) === year));
+    await loadData(year);
+}
+
+async function loadData(year) {
+    document.getElementById('loading-overlay').style.display = 'block';
+    document.getElementById('page-content').style.display   = 'none';
+    try {
+        const resp = await fetch(`/analysis/data?year=${year}`);
+        if (!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        renderAll(data);
+        document.getElementById('loading-overlay').style.display = 'none';
+        document.getElementById('page-content').style.display   = 'block';
+    } catch(err) {
+        document.getElementById('loading-overlay').innerHTML =
+            `<div class="text-center text-danger py-5">Error loading data: ${err.message}</div>`;
+    }
+}
+
+/* ── Render all sections ──────────────────────────────────────────────── */
+function renderAll(data) {
+    renderQ1(data);
+    renderQ2(data);
+    renderQ3(data);
+}
+
+/* ── Q1: Value by Source ──────────────────────────────────────────────── */
+function renderQ1(data) {
+    const owners  = data.q1.map(r => r.owner);
+    const sources = data.sources;
+
+    /* Grouped bar — absolute values */
+    const barTraces = sources.map(s => {
+        const key = s.toLowerCase().replace(/-/g,'_').replace(/ /g,'_');
+        return {
+            type: 'bar', name: s,
+            x: owners,
+            y: data.q1.map(r => r[key] ?? 0),
+            marker: {color: SOURCE_COLORS[s] ?? '#888'},
+            hovertemplate: '%{x}<br>' + s + ': $%{y:.1f}<extra></extra>',
+        };
+    });
+    Plotly.newPlot('q1-bar', barTraces, {
+        ...PLY_LAYOUT_BASE,
+        barmode: 'group',
+        margin: {l:45, r:8, t:30, b:100},
+        xaxis: {tickangle: -35, tickfont:{size:10}},
+        yaxis: {title:'Value ($)', zeroline:true, zerolinecolor:'#ccc'},
+        legend: {orientation:'h', y:1.08},
+    }, PLY_CONFIG);
+
+    /* Stacked 100% bar — proportions */
+    const pctTraces = sources.map(s => {
+        const key = s.toLowerCase().replace(/-/g,'_').replace(/ /g,'_') + '_pct';
+        return {
+            type: 'bar', name: s,
+            y: owners,
+            x: data.q1.map(r => r[key] ?? 0),
+            orientation: 'h',
+            marker: {color: SOURCE_COLORS[s] ?? '#888'},
+            hovertemplate: '%{y}<br>' + s + ': %{x:.1f}%<extra></extra>',
+        };
+    });
+    const pctSorted = [...data.q1].sort((a,b) => (a.draft_pct ?? a.draft ?? 0) - (b.draft_pct ?? b.draft ?? 0));
+    pctTraces.forEach(t => {
+        t.y = pctSorted.map(r => r.owner);
+        const key = t.name.toLowerCase().replace(/-/g,'_').replace(/ /g,'_') + '_pct';
+        t.x = pctSorted.map(r => r[key] ?? 0);
+    });
+    Plotly.newPlot('q1-pct', pctTraces, {
+        ...PLY_LAYOUT_BASE,
+        barmode: 'stack',
+        margin: {l:130, r:8, t:30, b:30},
+        xaxis: {title:'% of positive value', range:[0,105]},
+        yaxis: {tickfont:{size:9}},
+        legend: {orientation:'h', y:1.08},
+    }, PLY_CONFIG);
+}
+
+/* ── Q2: Trade Winners ────────────────────────────────────────────────── */
+function renderQ2(data) {
+    const el = document.getElementById('q2-content');
+    if (!data.q2 || data.q2.length === 0) {
+        el.innerHTML = '<div class="no-data-msg">Trade data not available for this year.</div>';
+        return;
+    }
+
+    let html = '<div class="table-responsive"><table class="table trade-table mb-0">';
+    html += `<thead><tr>
+        <th style="width:90px">Date</th>
+        <th>Team</th><th>Received</th>
+        <th style="width:80px;text-align:right">Post-Trade Value</th>
+        <th>Team</th><th>Received</th>
+        <th style="width:80px;text-align:right">Post-Trade Value</th>
+    </tr></thead><tbody>`;
+
+    data.q2.forEach((trade, i) => {
+        const a = trade.sides[0], b = trade.sides[1] ?? {team:'', players:'', value:0};
+        const aWins = a.value >= b.value;
+        const fmtVal = v => `<span class="${v >= 0 ? 'val-positive' : 'val-negative'}">$${v >= 0 ? '+' : ''}${v.toFixed(1)}</span>`;
+        html += `<tr>
+            <td style="white-space:nowrap;color:var(--color-muted)">${trade.date}</td>
+            <td><strong>${a.team}</strong>${aWins ? '<span class="winner-badge">✓</span>' : ''}</td>
+            <td style="color:#374151">${a.players}</td>
+            <td style="text-align:right">${fmtVal(a.value)}</td>
+            <td><strong>${b.team}</strong>${!aWins ? '<span class="winner-badge">✓</span>' : ''}</td>
+            <td style="color:#374151">${b.players}</td>
+            <td style="text-align:right">${fmtVal(b.value)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+
+    /* Mini scoreboard chart */
+    html += '<div id="q2-chart" style="height:280px;margin-top:16px"></div>';
+    el.innerHTML = html;
+
+    /* Build one grouped bar per trade */
+    const tradeLabels = data.q2.map((t,i) => `T${String(i+1).padStart(2,'0')} (${t.date})`);
+    const teamSet = [...new Set(data.q2.flatMap(t => t.sides.map(s => s.team)))];
+    const teamColors = ['#2196F3','#FF9800','#4CAF50','#E91E63','#9C27B0',
+                        '#00BCD4','#FF5722','#607D8B','#795548','#F44336',
+                        '#3F51B5','#009688'];
+    const colorMap = Object.fromEntries(teamSet.map((t,i) => [t, teamColors[i % teamColors.length]]));
+
+    const traces = [];
+    const allTeams = [...new Set(data.q2.flatMap(t => t.sides.map(s => s.team)))];
+    allTeams.forEach(team => {
+        const vals = data.q2.map(trade => {
+            const side = trade.sides.find(s => s.team === team);
+            return side ? side.value : null;
+        });
+        if (vals.some(v => v !== null)) {
+            traces.push({
+                type: 'bar', name: team,
+                x: tradeLabels, y: vals,
+                marker: {color: colorMap[team]},
+                hovertemplate: team + '<br>$%{y:.1f}<extra></extra>',
+            });
+        }
+    });
+    Plotly.newPlot('q2-chart', traces, {
+        ...PLY_LAYOUT_BASE,
+        barmode: 'group',
+        margin: {l:45, r:8, t:10, b:100},
+        xaxis: {tickangle:-40, tickfont:{size:9}},
+        yaxis: {title:'Post-Trade Value ($)', zeroline:true, zerolinecolor:'#ccc'},
+        legend: {font:{size:9}},
+        shapes: [{type:'line', x0:-0.5, x1:data.q2.length-0.5, y0:0, y1:0,
+                  line:{color:'#666', width:1}}],
+    }, PLY_CONFIG);
+}
+
+/* ── Q3: Draft Surplus ────────────────────────────────────────────────── */
+function renderQ3(data) {
+    document.getElementById('q3-conv-label').textContent =
+        `$${data.conv}/z-score (replacement level = $0)`;
+
+    /* Team surplus horizontal bar */
+    const teams   = data.q3.teams;
+    const tNames  = teams.map(r => r.team_name);
+    const tSurp   = teams.map(r => r.surplus);
+    const tColors = tSurp.map(v => v >= 0 ? '#4CAF50' : '#F44336');
+
+    Plotly.newPlot('q3-teams', [{
+        type: 'bar', orientation: 'h',
+        y: tNames, x: tSurp,
+        marker: {color: tColors},
+        hovertemplate: '%{y}<br>Surplus: $%{x:.1f}<extra></extra>',
+    }], {
+        ...PLY_LAYOUT_BASE,
+        margin: {l:140, r:30, t:30, b:35},
+        xaxis: {title:'Auction Surplus ($)', zeroline:true, zerolinecolor:'#ccc',
+                zerolinewidth:1.5},
+        yaxis: {tickfont:{size:10}, autorange:'reversed'},
+        title: {text:'Team Draft Surplus', font:{size:12}},
+        shapes: [{type:'line', x0:0, x1:0, y0:-0.5, y1:tNames.length-0.5,
+                  line:{color:'#999', width:1, dash:'dot'}}],
+    }, PLY_CONFIG);
+
+    /* Scatter: Paid vs Actual Value */
+    const players = data.q3.all_players;
+    if (players && players.length) {
+        const maxV = Math.max(...players.map(p => Math.max(p.Paid, p.team_value))) + 5;
+        const minV = Math.min(-2, ...players.map(p => p.team_value)) - 2;
+        const pColors = players.map(p => p.surplus >= 0 ? '#4CAF50' : '#F44336');
+
+        /* Label the top-5 and bottom-5 by surplus */
+        const sorted = [...players].sort((a,b) => b.surplus - a.surplus);
+        const labelSet = new Set([
+            ...sorted.slice(0, 5).map(p => p.Name),
+            ...sorted.slice(-5).map(p => p.Name),
+        ]);
+        const texts = players.map(p => labelSet.has(p.Name) ? p.Name : '');
+
+        Plotly.newPlot('q3-scatter', [{
+            type: 'scatter', mode: 'markers+text',
+            x: players.map(p => p.Paid),
+            y: players.map(p => p.team_value),
+            text: texts,
+            textposition: 'top center',
+            textfont: {size: 9},
+            marker: {color: pColors, size: 6, opacity: 0.7},
+            customdata: players.map(p =>
+                [p.Name, p.owner, p.Pos, p.Paid, p.team_value, p.surplus]),
+            hovertemplate:
+                '<b>%{customdata[0]}</b><br>%{customdata[1]}<br>Pos: %{customdata[2]}' +
+                '<br>Paid: $%{customdata[3]}<br>Value: $%{customdata[4]:.1f}' +
+                '<br>Surplus: $%{customdata[5]:.1f}<extra></extra>',
+        }, {
+            type: 'scatter', mode: 'lines', name: 'Break-even',
+            x: [0, maxV], y: [0, maxV],
+            line: {color: '#aaa', width: 1, dash: 'dash'},
+            hoverinfo: 'skip',
+        }], {
+            ...PLY_LAYOUT_BASE,
+            margin: {l:50, r:20, t:30, b:45},
+            xaxis: {title:'Auction Price Paid ($)', range:[-1, maxV]},
+            yaxis: {title:'Actual Value ($)',       range:[minV, maxV]},
+            title: {text:'Auction Price vs Actual Value', font:{size:12}},
+            showlegend: false,
+        }, PLY_CONFIG);
+    }
+
+    /* Best / Worst tables */
+    function buildMiniTable(players, isGood) {
+        if (!players.length) return '<div class="text-muted small">No data</div>';
+        const top = isGood
+            ? [...players].sort((a,b) => b.surplus - a.surplus).slice(0,12)
+            : [...players].sort((a,b) => a.surplus - b.surplus).slice(0,12);
+        let h = `<table class="table mini-table mb-0">
+            <thead><tr><th>Player</th><th>Owner</th><th>Pos</th>
+            <th style="text-align:right">Paid</th>
+            <th style="text-align:right">Value</th>
+            <th style="text-align:right">Surplus</th></tr></thead><tbody>`;
+        top.forEach(p => {
+            const cls = p.surplus >= 0 ? 'val-positive' : 'val-negative';
+            const sign = p.surplus >= 0 ? '+' : '';
+            h += `<tr>
+                <td>${p.Name}</td>
+                <td style="color:var(--color-muted)">${(p.owner||'').split(' ').slice(0,2).join(' ')}</td>
+                <td style="color:var(--color-muted)">${p.Pos||''}</td>
+                <td style="text-align:right">$${p.Paid}</td>
+                <td style="text-align:right">$${(+p.team_value).toFixed(1)}</td>
+                <td style="text-align:right" class="${cls}">${sign}$${(+p.surplus).toFixed(1)}</td>
+            </tr>`;
+        });
+        h += '</tbody></table>';
+        return h;
+    }
+
+    const allAuction = [...(data.q3.players_best || []), ...(data.q3.players_worst || [])];
+    document.getElementById('q3-best-table').innerHTML  = buildMiniTable(allAuction, true);
+    document.getElementById('q3-worst-table').innerHTML = buildMiniTable(allAuction, false);
+}
+
+/* ── Init ─────────────────────────────────────────────────────────────── */
+selectYear({{ default_year }});
+</script>
+</body>
+</html>
