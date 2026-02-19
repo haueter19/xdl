@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from typing import Optional
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -472,3 +472,88 @@ async def simulate_trade(trade: TradeRequest):
             'roster': tdf2_after.to_dict(orient='records'),
         },
     }
+
+
+# ── Admin ─────────────────────────────────────────────────────────────────────
+
+_PLAYERS_COLS = None
+
+def _get_players_cols():
+    """Return the set of valid column names for the players table (cached)."""
+    global _PLAYERS_COLS
+    if _PLAYERS_COLS is None:
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(players)"))
+            _PLAYERS_COLS = {row[1] for row in result.fetchall()}
+    return _PLAYERS_COLS
+
+
+class NewPlayer(BaseModel):
+    cbsid: int
+    CBSNAME: str
+    PLAYERNAME: Optional[str] = None
+    IDFANGRAPHS: Optional[str] = None
+    IDFANGRAPHS_minors: Optional[str] = None
+
+
+class PlayerUpdate(BaseModel):
+    data: dict
+
+
+@app.get('/admin', response_class=HTMLResponse)
+async def admin_view(request: Request):
+    return templates.TemplateResponse('admin.html', {'request': request})
+
+
+@app.post('/admin/players', status_code=201)
+async def add_player(player: NewPlayer):
+    with engine.connect() as conn:
+        existing = conn.execute(
+            text("SELECT cbsid FROM players WHERE cbsid = :cbsid"),
+            {'cbsid': player.cbsid}
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"Player with cbsid {player.cbsid} already exists")
+        conn.execute(
+            text("INSERT INTO players (cbsid, CBSNAME, PLAYERNAME, IDFANGRAPHS, IDFANGRAPHS_minors) "
+                 "VALUES (:cbsid, :CBSNAME, :PLAYERNAME, :IDFANGRAPHS, :IDFANGRAPHS_minors)"),
+            player.model_dump()
+        )
+        conn.commit()
+    return {'status': 'ok', 'cbsid': player.cbsid}
+
+
+@app.get('/admin/players')
+async def search_players(cbsid: Optional[str] = None, name: Optional[str] = None):
+    conditions, params = [], {}
+    if cbsid:
+        conditions.append("cbsid = :cbsid")
+        params['cbsid'] = cbsid
+    if name:
+        conditions.append("UPPER(CBSNAME) LIKE :name")
+        params['name'] = f"%{name.upper()}%"
+    if not conditions:
+        return []
+    where = " AND ".join(conditions)
+    df = pd.read_sql(text(f"SELECT * FROM players WHERE {where} LIMIT 50"), engine, params=params)
+    df = df.where(pd.notnull(df), other=None)
+    return df.to_dict(orient='records')
+
+
+@app.put('/admin/players/{cbsid}')
+async def update_player(cbsid: int, update: PlayerUpdate):
+    if not update.data:
+        raise HTTPException(status_code=400, detail="No data provided")
+    allowed = _get_players_cols()
+    set_parts, params = [], {'cbsid': cbsid}
+    for col, val in update.data.items():
+        if col == 'cbsid' or col not in allowed:
+            continue
+        set_parts.append(f'"{col}" = :{col}')
+        params[col] = val if val != '' else None
+    if not set_parts:
+        raise HTTPException(status_code=400, detail="No valid columns to update")
+    with engine.connect() as conn:
+        conn.execute(text(f"UPDATE players SET {', '.join(set_parts)} WHERE cbsid = :cbsid"), params)
+        conn.commit()
+    return {'status': 'ok', 'updated': list(update.data.keys())}
