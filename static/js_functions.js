@@ -345,15 +345,15 @@ $(document).ready(function(){
     t = `<div class="row">`
     c = 1;
     for (let tm of owner_list){
-    if (c==3 | c==6 | c==9 | c==12){
-        t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
-            <label for="team${c}">${tm.slice(0,11)}</label></div></div><div class="row">`
-        c+=1;
-    } else {
-        t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
-            <label for="team${c}">${tm.slice(0,11)}</label></div>`
-        c += 1;
-    }
+        if (c==3 | c==6 | c==9 | c==12){
+            t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
+                <label for="team${c}">${tm.slice(0,11)}</label></div></div><div class="row">`
+            c+=1;
+        } else {
+            t+= `<div class="col"><input type="radio" name="owner" value="${tm}">
+                <label for="team${c}">${tm.slice(0,11)}</label></div>`
+            c += 1;
+        }
     }
     t +=  `</div>`
     el.html(t)
@@ -369,7 +369,7 @@ $(document).ready(function(){
     
     $("input[name='cbsid']").on('focusout', function(e){
         var selected = $(this).val();
-        $(this).create_radar_chart(selected);
+        //$(this).create_radar_chart(selected);
         bid_amounts(selected);
         
         $.get("/draft/sims/"+selected, function(resp, status){
@@ -492,7 +492,7 @@ $(document).ready(function(){
             if (v.Name == p_name) {
                 var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
-                $(this).create_radar_chart(tr_id);
+                //$(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
                 return tr_id;
             }
@@ -504,7 +504,7 @@ $(document).ready(function(){
             if (v.Name == p_name) {
                 var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
-                $(this).create_radar_chart(tr_id);
+                //$(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
                 return tr_id;
             }
@@ -516,7 +516,7 @@ $(document).ready(function(){
             if (v.Name == p_name) {
                 var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
-                $(this).create_radar_chart(tr_id);
+                //$(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
                 return tr_id;
             }
@@ -528,7 +528,7 @@ $(document).ready(function(){
             if (v.Name == p_name) {
                 var tr_id = v.cbsid
                 $("#player_select").val(tr_id);
-                $(this).create_radar_chart(tr_id);
+                //$(this).create_radar_chart(tr_id);
                 bid_amounts(tr_id);
                 return tr_id;
             }
@@ -541,13 +541,13 @@ $(document).ready(function(){
         var txt = data.points[0].text.split("<br>")
         console.log(txt);
         $("#player_select").val(txt[1].substring(4));
-        $.fn.create_radar_chart(txt[1].substring(4));
+        //$.fn.create_radar_chart(txt[1].substring(4));
         bid_amounts(txt[1].substring(4));
     });
     document.getElementById("tiers_chart").on('plotly_click', function(data){
         var txt = data.points[0].text.split("<br>")
         $("#player_select").val(txt[1].substring(4));
-        $.fn.create_radar_chart(txt[1].substring(4));
+        //$.fn.create_radar_chart(txt[1].substring(4));
         bid_amounts(txt[1].substring(4));
     });
 })
