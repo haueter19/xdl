@@ -192,9 +192,9 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get('/')
-async def slash_route():
-    return RedirectResponse('/draft')
+@app.get('/', response_class=HTMLResponse)
+async def slash_route(request: Request):
+    return templates.TemplateResponse('index.html', {'request': request})
 
 @app.get("/draft")
 async def draft_view(request: Request, status: Optional[str] = 'ok'):
@@ -297,16 +297,6 @@ async def update_db(cbsid=int, owner=str, price=int, supp=Optional[int] == 0):
    
     player = df[df['cbsid']==int(cbsid)].iloc[0][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
     roster = build_roster(n_teams, owner_list, df, fu.pos_order)
-    
-    # REMOVE/COMMENT OUT THE ENTIRE ROSTER CHECK TO JUST ADD THE PLAYER
-    # results = fu.check_roster_pos(player, roster, df, fu.pos_order)
-    # print("Results from first check_roster_pos:", results)
-    # for result in results:
-    #     print('Processing result:', result)
-    #     for val in result.values():
-    #         if val is None:
-    #             print('no roster spot available')
-    #             return RedirectResponse('/draft?status=unrosterable')
    
     # Just add the player directly without position checking
     conn = engine.connect()
