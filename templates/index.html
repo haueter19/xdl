@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="Daniel Haueter">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+    <title>XDL Fantasy Baseball</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', path='/style.css') }}" rel="stylesheet">
+    <style>
+        .landing-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .landing-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.25rem;
+        }
+        .landing-subtitle {
+            color: var(--color-muted);
+            font-size: 0.95rem;
+            margin-bottom: 2.5rem;
+        }
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            width: 100%;
+            max-width: 640px;
+        }
+        .nav-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: 1.5rem 1.25rem;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            transition: box-shadow 0.15s, border-color 0.15s, transform 0.1s;
+        }
+        .nav-card:hover {
+            box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+            color: inherit;
+            text-decoration: none;
+        }
+        .nav-card.disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .nav-card-icon {
+            font-size: 1.6rem;
+            line-height: 1;
+        }
+        .nav-card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .nav-card-desc {
+            font-size: 0.78rem;
+            color: var(--color-muted);
+            line-height: 1.4;
+        }
+        .nav-card-badge {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 99px;
+            background: #e2e8f0;
+            color: var(--color-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-top: 0.2rem;
+            width: fit-content;
+        }
+    </style>
+</head>
+<body>
+    <div class="landing-wrapper">
+        <div class="landing-title">XDL Fantasy Baseball</div>
+        <div class="landing-subtitle">Choose a section to get started</div>
+
+        <div class="nav-grid">
+            <a href="/draft" class="nav-card">
+                <div class="nav-card-icon">🏟️</div>
+                <div class="nav-card-title">Draft Room</div>
+                <div class="nav-card-desc">Live auction draft board, bidding, and roster tracking.</div>
+            </a>
+
+            <a href="/trade" class="nav-card">
+                <div class="nav-card-icon">🔄</div>
+                <div class="nav-card-title">Trade Analyzer</div>
+                <div class="nav-card-desc">Simulate trades and compare roster impact for both teams.</div>
+            </a>
+
+            <a href="/admin" class="nav-card disabled">
+                <div class="nav-card-icon">⚙️</div>
+                <div class="nav-card-title">Admin</div>
+                <div class="nav-card-desc">Manage league settings, players, and data imports.</div>
+                <span class="nav-card-badge">Coming soon</span>
+            </a>
+
+            <a href="/analysis" class="nav-card disabled">
+                <div class="nav-card-icon">📊</div>
+                <div class="nav-card-title">Season Analysis</div>
+                <div class="nav-card-desc">Review previous season stats, standings, and trends.</div>
+                <span class="nav-card-badge">Coming soon</span>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
