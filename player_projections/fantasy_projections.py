@@ -194,26 +194,28 @@ class FantasyProjections:
     
     def evaluate_season_performance(
         self,
-        actual_hitting: pd.DataFrame,
-        actual_pitching: pd.DataFrame,
+        actual_hitting: Optional[pd.DataFrame] = None,
+        actual_pitching: Optional[pd.DataFrame] = None,
         normalize_to_budget: bool = True
     ) -> pd.DataFrame:
         """
         MODE 2: Post-season full year retrospective.
-        
+
         Evaluates actual season performance using:
-        - Actual season stats as input
-        - SAME previous year baseline as draft (for comparison)
+        - Actual season stats as input (or loads year-1 stats from file if not provided)
+        - Qualifiers derived from the same stats being evaluated
         - NO positional adjustments (measuring absolute performance)
         - Normalized to league budget for comparability
-        
+
         Args:
-            actual_hitting: Actual season hitting stats
-            actual_pitching: Actual season pitching stats
+            actual_hitting: Actual season hitting stats. If None, loads from
+                            {year-1}-final-stats-h.csv.
+            actual_pitching: Actual season pitching stats. If None, loads from
+                             {year-1}-final-stats-p.csv.
             normalize_to_budget: Scale to league budget (recommended: True)
-            
+
         Returns:
-            DataFrame with actual season values (comparable to draft values)
+            DataFrame with actual season values
         """
         logger.info("=" * 60)
         logger.info("MODE 2: EVALUATING SEASON PERFORMANCE")
@@ -222,13 +224,12 @@ class FantasyProjections:
         print("MODE 2: EVALUATING SEASON PERFORMANCE")
         print("=" * 60)
 
-        # Calculate qualifiers from PREVIOUS season
-        previous_hitting = self.load_previous_season_stats('hitting')
-        previous_pitching = self.load_previous_season_stats('pitching')
-        self.qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
-        
-        logger.info(f"Using {self.year - 1} season as baseline")
-        print(f"Using {self.year - 1} season as baseline")
+        if actual_hitting is None:
+            actual_hitting = self.load_previous_season_stats('hitting')
+        if actual_pitching is None:
+            actual_pitching = self.load_previous_season_stats('pitching')
+
+        self.qualifiers = self.calculate_qualifiers(actual_hitting, actual_pitching)
         
         # Calculate z-scores (NO positional adjustment)
         hitting_z = self.calculate_z_scores(actual_hitting, 'hitting')
