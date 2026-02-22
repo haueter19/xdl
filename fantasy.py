@@ -697,42 +697,7 @@ def compute_analysis(year: int) -> dict:
             filt = with_pos[~with_pos['Primary_Pos'].isin(_ANALYSIS_HITTER_POS).fillna(False)]
         return int(filt['cbsid'].iloc[0]) if len(filt) else int(matches['cbsid'].iloc[0])
 
-    # ── Build FantasyProjections for value computation ──────────────────────
-    # Load previous year stats from stats table as the qualifier baseline
-    prev_year = year - 1
-    # Check if prev_year stats exist; fall back to current year if not
-    yrs_avail = pd.read_sql("SELECT DISTINCT year FROM stats", engine)['year'].tolist()
-    baseline_year = prev_year if prev_year in yrs_avail else year
-    bqs = 'sum(COALESCE(W, 0))' if baseline_year <= 2024 else 'sum(COALESCE(QS, 0))'
-
-    prev_raw = pd.read_sql(f"""
-        SELECT cbsid,
-               sum(R) R, sum(RBI) RBI, sum(HR) HR, sum(SB) SB,
-               sum(H) H, sum(AB) AB, sum(SO) SO, sum(SvHld) SvHld,
-               sum(ER) ER, sum(Ha) HA, sum(BBa) BB, sum(IP) IP,
-               {bqs} QS
-        FROM stats WHERE year={baseline_year} GROUP BY cbsid
-    """, engine)
-    prev_raw = prev_raw.merge(
-        all_proj[['cbsid', 'Name', 'Primary_Pos', 'ptype']].drop_duplicates('cbsid'),
-        on='cbsid', how='left'
-    ).fillna({'ptype': 'p', 'Primary_Pos': 'SP', 'Name': ''})
-
-    # Fix 1: Persistent two-way player reclassification (Ohtani etc.)
-    # Any player listed as pitcher with negligible IP and significant AB → treat as hitter
-    reclass_p = (
-        (prev_raw['ptype'] == 'p') &
-        (prev_raw['IP'].fillna(0) < 5) &
-        (prev_raw['AB'].fillna(0) >= 50)
-    )
-    prev_raw.loc[reclass_p, 'ptype'] = 'h'
-    prev_raw.loc[reclass_p, 'Primary_Pos'] = 'DH'
-    prev_raw['PA'] = prev_raw['AB'] + prev_raw['BB']  # approx plate appearances
-
-    prev_hit = prev_raw[prev_raw['ptype'] == 'h'].copy()
-    prev_pit = prev_raw[prev_raw['ptype'] == 'p'].copy()
-
-    # Initialize FantasyProjections and compute qualifiers from baseline year
+    # Initialize FantasyProjections (qualifiers will be derived from year-1 CSV stats)
     fp = _FP(
         db_path='fantasy_data.db',
         data_dir='player_projections/data',
@@ -741,9 +706,6 @@ def compute_analysis(year: int) -> dict:
         roster_size=23,
         budget_per_team=_ANALYSIS_TM_DOLLARS,
     )
-    qualifiers = fp.calculate_qualifiers(prev_hit, prev_pit)
-    fp.draft_qualifiers = qualifiers
-    fp.qualifiers = qualifiers
 
     # ── Season stats (W→QS for pre-2025) ───────────────────────────────────
     raw_stats = pd.read_sql(
@@ -757,7 +719,7 @@ def compute_analysis(year: int) -> dict:
     st = raw_stats.groupby('cbsid')[SCOLS].sum(min_count=1).reset_index()
     st = st.merge(p_meta, on='cbsid', how='left').fillna({'ptype': 'p', 'Primary_Pos': 'SP', 'Name': ''})
 
-    # Fix 1 (applied to current year too): persistent two-way player fix
+    # Persistent two-way player fix (e.g. Ohtani)
     reclass = (
         (st['ptype'] == 'p') &
         (st['IP'].fillna(0) < 5) &
@@ -772,15 +734,13 @@ def compute_analysis(year: int) -> dict:
     st_hit_fp = st_fp[st_fp['ptype'] == 'h'].copy()
     st_pit_fp = st_fp[st_fp['ptype'] == 'p'].copy()
 
-    # Fix 3: Use FantasyProjections for z-scores and dollar values
-    hitting_z  = fp.calculate_z_scores(st_hit_fp, 'hitting')
-    pitching_z = fp.calculate_z_scores(st_pit_fp, 'pitching')
-    season_vals = fp._convert_to_dollars(hitting_z, pitching_z, z_column='total_z')
+    # Evaluate full-season performance; qualifiers derived from year-1 CSV stats
+    season_vals = fp.evaluate_season_performance(st_hit_fp, st_pit_fp)
     conv = fp._last_conversion_factor
 
     # Replacement levels (for Q2 post-trade value computation)
-    hz = hitting_z['total_z'].sort_values(ascending=False)
-    pz = pitching_z['total_z'].sort_values(ascending=False)
+    hz = season_vals[season_vals['ptype'] == 'h']['total_z'].sort_values(ascending=False)
+    pz = season_vals[season_vals['ptype'] == 'p']['total_z'].sort_values(ascending=False)
     rl_h = float(hz.iloc[_ANALYSIS_REPL_H - 1]) if len(hz) >= _ANALYSIS_REPL_H else float(hz.min())
     rl_p = float(pz.iloc[_ANALYSIS_REPL_P - 1]) if len(pz) >= _ANALYSIS_REPL_P else float(pz.min())
 
