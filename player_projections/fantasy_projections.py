@@ -222,17 +222,10 @@ class FantasyProjections:
         print("MODE 2: EVALUATING SEASON PERFORMANCE")
         print("=" * 60)
 
-        if self.qualifiers is None:
-            # Load previous season data if not provided    
-            previous_hitting = self.load_previous_season_stats('hitting')
-            previous_pitching = self.load_previous_season_stats('pitching')
-            
-            # Calculate qualifiers from PREVIOUS season
-            qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
-            self.qualifiers = qualifiers  # Save for later comparison
-        else:
-            # Use SAME qualifiers as draft (previous season)
-            self.qualifiers = self.draft_qualifiers
+        # Calculate qualifiers from PREVIOUS season
+        previous_hitting = self.load_previous_season_stats('hitting')
+        previous_pitching = self.load_previous_season_stats('pitching')
+        self.qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
         
         logger.info(f"Using {self.year - 1} season as baseline (same as draft)")
         print(f"Using {self.year - 1} season as baseline (same as draft)")
