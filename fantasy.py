@@ -564,7 +564,7 @@ async def update_player(cbsid: int, update: PlayerUpdate):
 import ast as _ast
 
 _analysis_cache: dict = {}
-ANALYSIS_YEARS = [2025, 2024, 2023]
+ANALYSIS_YEARS = [2025, 2024, 2023, 2022]
 _ANALYSIS_DEFAULT_YEAR = datetime.now().year - 1
 
 _ANALYSIS_HITTER_POS = {'C', '1B', '2B', '3B', 'SS', 'OF', 'DH', 'MI', 'CI'}
@@ -1044,7 +1044,7 @@ async def analysis_view(request: Request):
 
 
 @app.get('/analysis/data')
-async def analysis_data(year: int = 2025):
+async def analysis_data(year: int = datetime.now().year - 1):
     if year not in ANALYSIS_YEARS:
         raise HTTPException(status_code=400, detail=f"Year must be one of {ANALYSIS_YEARS}")
     try:
