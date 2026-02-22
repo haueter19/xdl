@@ -227,8 +227,8 @@ class FantasyProjections:
         previous_pitching = self.load_previous_season_stats('pitching')
         self.qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
         
-        logger.info(f"Using {self.year - 1} season as baseline (same as draft)")
-        print(f"Using {self.year - 1} season as baseline (same as draft)")
+        logger.info(f"Using {self.year - 1} season as baseline")
+        print(f"Using {self.year - 1} season as baseline")
         
         # Calculate z-scores (NO positional adjustment)
         hitting_z = self.calculate_z_scores(actual_hitting, 'hitting')
