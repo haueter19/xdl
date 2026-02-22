@@ -82,6 +82,7 @@ class FantasyProjections:
         self.hitting_projections = None
         self.pitching_projections = None
         self.qualifiers = None
+        self.draft_qualifiers = None
         self.draft_values = None
         
         # Column name variations we know about
@@ -221,14 +222,14 @@ class FantasyProjections:
         print("MODE 2: EVALUATING SEASON PERFORMANCE")
         print("=" * 60)
 
-        if self.draft_qualifiers is None:
+        if self.qualifiers is None:
             # Load previous season data if not provided    
             previous_hitting = self.load_previous_season_stats('hitting')
             previous_pitching = self.load_previous_season_stats('pitching')
             
             # Calculate qualifiers from PREVIOUS season
             qualifiers = self.calculate_qualifiers(previous_hitting, previous_pitching)
-            self.draft_qualifiers = qualifiers  # Save for later comparison
+            self.qualifiers = qualifiers  # Save for later comparison
         else:
             # Use SAME qualifiers as draft (previous season)
             self.qualifiers = self.draft_qualifiers
@@ -249,7 +250,7 @@ class FantasyProjections:
         )
         
         logger.info(f"Season conversion factor: ${self._last_conversion_factor:.2f}/z")
-        logger.info(f"Draft conversion factor was: ${self.draft_conversion_factor:.2f}/z")
+        #logger.info(f"Draft conversion factor was: ${self.draft_conversion_factor:.2f}/z")
         logger.info("=" * 60)
         
         return season_values
@@ -476,6 +477,9 @@ class FantasyProjections:
         
         df = pd.read_csv(filepath, encoding='latin-1')
         df = self.standardize_columns(df, player_type)
+        if player_type == 'pitching':
+            df['SvHld'] = df['SV'] + df['HLD']
+        
         
         logger.info(f"Loaded {len(df)} {player_type} records from {self.year - 1}")
         return df
@@ -940,12 +944,18 @@ class FantasyProjections:
             Dictionary with mean and std for each stat category
         """
         qualifiers = {}
-        
+
+        if not 'Primary_Pos' in hitting.columns:
+            hitting['Primary_Pos'] = hitting['Pos'].apply(self.find_primary_position) if 'Pos' in hitting.columns else 'Unknown'
+        if not 'Primary_Pos' in pitching.columns:
+            pitching['Primary_Pos'] = pitching['Pos'].apply(self.find_primary_position) if 'Pos' in pitching.columns else 'Unknown'
+
         # Hitting qualifiers
         if 'PA' in hitting.columns:
             pa_cutoff = hitting[hitting['PA'] > 0]['PA'].quantile(hitting_percentile)
             qual_hitters = hitting[hitting['PA'] >= pa_cutoff].copy()
             logger.info(f"Found {len(qual_hitters)} qualifying hitters (PA >= {pa_cutoff:.0f})")
+            print(f"Found {len(qual_hitters)} qualifying hitters (PA >= {pa_cutoff:.0f})")
             
             # Calculate league batting average
             lg_ba = qual_hitters['H'].sum() / qual_hitters['AB'].sum()
