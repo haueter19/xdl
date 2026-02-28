@@ -767,7 +767,7 @@ def compute_analysis(year: int) -> dict:
     wk = wk.merge(first_wk, on=['cbsid','owner_id'], how='left')
 
     # ── Acquisition source classification ───────────────────────────────────
-    _trades_csv_path = f'{year}-trades.csv'
+    _trades_csv_path = f'player_projections/data/{year}-trades.csv'
     if _os.path.exists(_trades_csv_path):
         tr_csv = pd.read_csv(_trades_csv_path)
         traded_pairs: set = set()
@@ -849,8 +849,8 @@ def compute_analysis(year: int) -> dict:
             return 0.0
 
     q2_out = None
-    if _os.path.exists(f'{year}-trades.csv'):
-        tr_csv = pd.read_csv(f'{year}-trades.csv')
+    if _os.path.exists(_trades_csv_path):
+        tr_csv = pd.read_csv(_trades_csv_path)
         events = []
         for _, row in tr_csv.iterrows():
             if pd.isna(row.get('owner_id')):
