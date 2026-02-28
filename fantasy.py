@@ -735,7 +735,7 @@ def compute_analysis(year: int) -> dict:
 
     # Prepare for FantasyProjections (rename Ha→HA, BBa→BB, add PA)
     st_fp = st.rename(columns={'Ha': 'HA', 'BBa': 'BB'}).copy()
-    st_fp['PA'] = st_fp['AB'] + st_fp['BB']
+    st_fp['PA'] = st_fp['AB']# + st_fp['BB']
     st_hit_fp = st_fp[st_fp['ptype'] == 'h'].copy()
     st_pit_fp = st_fp[st_fp['ptype'] == 'p'].copy()
 
