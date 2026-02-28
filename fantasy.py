@@ -592,15 +592,20 @@ _PNAME_TO_OID: dict[int, dict] = {
     },
 }
 
-# CSV owner names → owner_id (for 2025 adds/trades CSVs)
-_CSV_TO_OID_2025 = {
+# CSV owner names → owner_id (for YYYY-adds/trades CSVs, all years)
+_CSV_TO_OID = {
     '9 Grand Kids': 30,           'Brewbirds': 3,            'Charmer': 36,
     'Dirty Birds': 41,            'Harveys Wallbangers': 4,
     'Lil Trumps Wiscompton Wu-Tang': 42,  'Wiscompton Wu-Tang': 42,
     'Lima Time!': 38,             "Mom's Cookin": 47,
     'Roid Ragers': 44,            'Trouble With The Curve': 1,
     'Trouble with the Curve': 1,  'Ugly Spuds': 29, 'Young Guns': 45,
+    # Historical names (2021–2024)
+    'Madness': 30, 'Midnight': 30,
+    'Lil Trump': 27, "Lil Trump & the Ivanabees": 27,
+    'Harvey': 4, 'Lima Time': 38, 'Mother': 47, 'Trouble': 1, 'Wu-Tang': 42,
 }
+_CSV_TO_OID_2025 = _CSV_TO_OID  # backward-compat alias
 
 # Full canonical name → owner_id (for trades_2023.json partner names)
 _FULLNAME_TO_OID = {
@@ -762,10 +767,9 @@ def compute_analysis(year: int) -> dict:
     wk = wk.merge(first_wk, on=['cbsid','owner_id'], how='left')
 
     # ── Acquisition source classification ───────────────────────────────────
-    if year == 2025:
-        tr_csv = pd.read_csv('2025-trades.csv')
-        tr_csv['owner_id'] = tr_csv['owner'].map(_CSV_TO_OID_2025)
-        # Fix 2: Use _lookup_cbsid with position disambiguation for all trade players
+    _trades_csv_path = f'{year}-trades.csv'
+    if _os.path.exists(_trades_csv_path):
+        tr_csv = pd.read_csv(_trades_csv_path)
         traded_pairs: set = set()
         for _, row in tr_csv.iterrows():
             if pd.isna(row.get('owner_id')):
@@ -845,9 +849,8 @@ def compute_analysis(year: int) -> dict:
             return 0.0
 
     q2_out = None
-    if year == 2025:
-        tr_csv = pd.read_csv('2025-trades.csv')
-        tr_csv['owner_id'] = tr_csv['owner'].map(_CSV_TO_OID_2025)
+    if _os.path.exists(f'{year}-trades.csv'):
+        tr_csv = pd.read_csv(f'{year}-trades.csv')
         events = []
         for _, row in tr_csv.iterrows():
             if pd.isna(row.get('owner_id')):
@@ -855,7 +858,6 @@ def compute_analysis(year: int) -> dict:
             recv_oid = int(row['owner_id'])
             try:
                 for p in _ast.literal_eval(row['parsed_transactions']):
-                    # Fix 2: position-aware cbsid lookup
                     cid = _lookup_cbsid(p['Name'], p.get('Position', ''))
                     events.append({
                         'effective': row['Effective'],
@@ -869,7 +871,7 @@ def compute_analysis(year: int) -> dict:
                 pass
         ev_df = pd.DataFrame(events).dropna(subset=['cbsid'])
         ev_df['cbsid']    = ev_df['cbsid'].astype(int)
-        ev_df['send_oid'] = ev_df['send_name'].map(_CSV_TO_OID_2025)
+        ev_df['send_oid'] = ev_df['send_name'].map(_CSV_TO_OID)
         ev_df['team_pair'] = ev_df.apply(
             lambda r: tuple(sorted([str(r['recv_oid']), str(r.get('send_oid', ''))])), axis=1)
         unique_ev = (ev_df[['effective','period','team_pair']].drop_duplicates()
@@ -898,7 +900,7 @@ def compute_analysis(year: int) -> dict:
                               'winner': sides[0]['team'], 'sides': sides})
         q2_out = q2_trades
 
-    elif year == 2023:
+    elif year == 2023 and _os.path.exists('trades_2023.json'):
         with open('trades_2023.json') as f:
             t23 = json.load(f)
         seen: dict = {}
@@ -938,24 +940,20 @@ def compute_analysis(year: int) -> dict:
             q2_23.append({'date': f'Week {week}', 'winner': sides[0]['team'], 'sides': sides})
         q2_out = q2_23
 
-    # ── Q3: Draft surplus (Fix 4: full-season value, no pro-rating) ─────────
-    # Use the complete season actual_value attributed to the drafting team only.
-    # No fractions — whether a player was later traded or dropped doesn't affect this.
+    # ── Q3: Draft surplus ────────────────────────────────────────────────────
+    # Use full-season actual_value for the drafting team regardless of later
+    # trades or drops. Clip actual_value at -10 (replacement level floor).
     owned = all_proj[all_proj['Owner'].notna()].copy()
     owned['owner_id'] = owned['Owner'].map(name_to_oid)
     owned = owned.dropna(subset=['cbsid', 'owner_id'])
     owned['cbsid']    = owned['cbsid'].astype(int)
     owned['owner_id'] = owned['owner_id'].astype(int)
 
-    # drafted_rows: (cbsid, owner_id) pairs where that owner drafted the player
-    drafted_rows = (wk[wk['source'] == 'Draft'][['cbsid','owner_id']]
-                    .drop_duplicates('cbsid'))
     # full-season value per player (FantasyProjections-derived)
     full_vals = st[['cbsid','actual_value']].copy()
 
-    drafted = owned.merge(drafted_rows, on=['cbsid','owner_id'], how='inner')
-    drafted = drafted.merge(full_vals, on='cbsid', how='left')
-    drafted['actual_value'] = drafted['actual_value'].fillna(0)
+    drafted = owned.merge(full_vals, on='cbsid', how='left')
+    drafted['actual_value'] = drafted['actual_value'].fillna(0).clip(lower=-10)
     drafted['surplus']      = (drafted['actual_value'] - drafted['Paid']).round(1)
     drafted['team_name']    = drafted['owner_id'].map(oid_to_name)
     if 'Pos' not in drafted.columns:
