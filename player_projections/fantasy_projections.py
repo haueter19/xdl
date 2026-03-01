@@ -384,7 +384,7 @@ class FantasyProjections:
         # MAP TO CBS IDs BEFORE AVERAGING (important!)
         missing_cbsid = combined.loc[combined['cbsid'].isna()].reset_index(drop=True)
         has_cbsid = combined.loc[combined['cbsid'].notna()].reset_index(drop=True)
-        merged_cbsid = missing_cbsid.merge(self.player_index[['cbsid', 'CBSNAME', 'IDFANGRAPHS', 'IDFANGRAPHS_minors']], left_on='playerid', right_on='IDFANGRAPHS', how='inner', suffixes=[None,'_y'])
+        merged_cbsid = missing_cbsid.merge(self.player_index[['cbsid', 'CBSNAME', 'Age', 'IDFANGRAPHS', 'IDFANGRAPHS_minors']], left_on='playerid', right_on='IDFANGRAPHS', how='inner', suffixes=[None,'_y'])
         merged_cbsid = merged_cbsid.fillna({'cbsid':merged_cbsid['cbsid_y'], 'CBSNAME':merged_cbsid['CBSNAME_y']})
         merged_cbsid.drop(columns=['CBSNAME_y', 'cbsid_y', 'IDFANGRAPHS', 'IDFANGRAPHS_minors'],inplace=True)
 
@@ -553,8 +553,26 @@ class FantasyProjections:
 
         # Refresh players data after updates
         players = pd.read_sql("SELECT * FROM players", self.engine)
-        
-        # 4. Removes from duplicates where YahooID is NULL
+
+        # 4. For players with a minors Fangraphs ID where the new data shows an majors Fangraphs ID, update the record
+        new_fangraphs_id = players[players['IDFANGRAPHS'].str.startswith('sa', na=False)].merge(ids[['IDFANGRAPHS', 'FANGRAPHSNAME']], on='FANGRAPHSNAME', suffixes=['_players', '_ids'])[['cbsid', 'CBSNAME', 'IDFANGRAPHS_players', 'IDFANGRAPHS_ids']]
+        updated_fangraphs_count = 0
+        if new_fangraphs_id.shape[0] > 0:
+            with self.engine.connect() as conn:
+                for i, row in new_fangraphs_id.iterrows():
+                    if row['IDFANGRAPHS_ids'][0] in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']: # looking for a majors ID that starts with a number
+                        update_stmt = text(f"UPDATE players SET IDFANGRAPHS=:y, IDFANGRAPHS_minors=:x WHERE IDFANGRAPHS=:x")
+                        update_values = {'x':row['IDFANGRAPHS_players'], 'y':row['IDFANGRAPHS_ids']}
+                        result = conn.execute(update_stmt, update_values)
+                        conn.commit()
+                        updated_fangraphs_count += result.rowcount
+        logger.info(f"Updated {updated_fangraphs_count} player records with new Fangraphs ID from Google Sheet")
+        print(f"Updated {updated_fangraphs_count} player records with new Fangraphs ID from Google Sheet")
+
+        # Refresh players data after updates
+        players = pd.read_sql("SELECT * FROM players", self.engine)
+
+        # 5. Removes from duplicates where YahooID is NULL
         removed_yahooid_count = 0
         duplicate_cbsids = players[players['cbsid'].notna()].groupby('cbsid').filter(lambda x: len(x) > 1).sort_values(['cbsid', 'IDFANGRAPHS'])
         if duplicate_cbsids.shape[0] > 0:
@@ -571,7 +589,7 @@ class FantasyProjections:
         # Refresh players data after updates
         players = pd.read_sql("SELECT * FROM players", self.engine)
 
-        # 5. Add records from Google sheet to players table if they don't already exist
+        # 6. Add records from Google sheet to players table if they don't already exist
         insert_count = 0
         merged = players.merge(ids[ids['CBSID'].notna()][['CBSNAME', 'CBSID', 'IDFANGRAPHS']], left_on='cbsid', right_on='CBSID', how='outer', indicator=True)
         if merged._merge.value_counts()['right_only'] > 0:
@@ -1419,6 +1437,23 @@ class FantasyProjections:
         # Fallback
         return positions[0] if positions else None
     
+
+    def convert_str_to_date(self, d):
+        """Convert date string to datetime object for player age calculations."""
+        if d:
+            parts = d.split('/')
+            parts = [int(part) for part in parts]
+            if len(parts)==3:
+                if 65 < parts[2] < 100:
+                    parts[2]+=1900
+                elif 0 <= parts[2] < 20:
+                    parts[2]+=2000
+                
+            return datetime(parts[2], parts[0], parts[1])
+        else:
+            return None
+    
+
     def load_player_index(self) -> pd.DataFrame:
         """
         Docstring for load_player_index
@@ -1430,6 +1465,8 @@ class FantasyProjections:
         # Load player index from database
         with self.engine.connect() as conn:
             players = pd.read_sql("SELECT * FROM players", conn)
+            players['BIRTHDATE'] = players['BIRTHDATE'].apply(lambda x: self.convert_str_to_date(x))
+            players['Age'] = players['BIRTHDATE'].apply(lambda x: None if pd.isnull(x) else round((datetime(datetime.now().year, 6, 1) - x).days / 365,1))
             self.player_index = players
         
         logger.info(f"Loaded player index with {len(players)} records")
