@@ -177,7 +177,7 @@ $.fn.update_player_stats_window = function(selected_index){
     +'<td>'+data[selected_index]['Name']+'</td>'
     +'<td>'+data[selected_index]['Team']+'</td>'
     +'<td>'+data[selected_index]['Pos']+'</td>'
-    +'<td>'+data[selected_index]['player_age_ly']+'</td>'
+    +'<td>'+data[selected_index]['Age']+'</td>'
     +'<td class="text-value">$'+data[selected_index]['Value']+'</td>'
     +'<td>'+data[selected_index]['curValue']+'</td>'
     +'<td>'+data[selected_index]['CBS']+'</td>'
@@ -255,7 +255,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+ (data[selected_index]['wRC+'] != null ? data[selected_index]['wRC+'].toFixed(0) : 'N/A')+'</td>'
         // 2 years ago
         +'</tr><tr><td>'+twoYearsAgo+'</td>'
-        +'<td>'+data[selected_index]['pa_2ly']+'</td>'
+        +'<td>'+data[selected_index]['PA_2ly']+'</td>'
         +'<td>'+data[selected_index]['woba_diff_2ly']+'</td>'
         +'<td>'+data[selected_index]['xba_2ly']+'</td>'
         +'<td>'+data[selected_index]['BA_2ly']+'</td>'
