@@ -115,14 +115,13 @@
     <!-- Page content -->
     <div id="page-content" style="display:none">
 
-        <!-- Q1: Value by Source -->
+        <!-- Q1: Roster Usage by Source -->
         <div class="analysis-card mb-4">
             <div class="section-label">Question 1</div>
-            <div class="analysis-card-title">Value by Acquisition Source</div>
+            <div class="analysis-card-title">Roster Usage by Acquisition Source</div>
             <div class="analysis-card-desc">
-                How much of each team's season value came from the draft, free agent pickups, and trades?
-                Value is the actual z-score production shifted to replacement level and converted to dollars.
-                Each player's full-season value is pro-rated by weeks on each team.
+                How many started player-weeks did each team get from the draft, free agent pickups, and trades?
+                Only weeks where a player's decision was "start" are counted, showing where each team's active roster actually came from.
             </div>
             <div class="row g-3">
                 <div class="col-lg-8"><div id="q1-bar" style="height:340px"></div></div>
@@ -222,12 +221,12 @@ function renderAll(data) {
     renderQ3(data);
 }
 
-/* ── Q1: Value by Source ──────────────────────────────────────────────── */
+/* ── Q1: Roster Usage by Source ───────────────────────────────────────── */
 function renderQ1(data) {
     const owners  = data.q1.map(r => r.owner);
     const sources = data.sources;
 
-    /* Grouped bar — absolute values */
+    /* Grouped bar — absolute player-weeks */
     const barTraces = sources.map(s => {
         const key = s.toLowerCase().replace(/-/g,'_').replace(/ /g,'_');
         return {
@@ -235,7 +234,7 @@ function renderQ1(data) {
             x: owners,
             y: data.q1.map(r => r[key] ?? 0),
             marker: {color: SOURCE_COLORS[s] ?? '#888'},
-            hovertemplate: '%{x}<br>' + s + ': $%{y:.1f}<extra></extra>',
+            hovertemplate: '%{x}<br>' + s + ': %{y} player-weeks<extra></extra>',
         };
     });
     Plotly.newPlot('q1-bar', barTraces, {
@@ -243,7 +242,7 @@ function renderQ1(data) {
         barmode: 'group',
         margin: {l:45, r:8, t:30, b:100},
         xaxis: {tickangle: -35, tickfont:{size:10}},
-        yaxis: {title:'Value ($)', zeroline:true, zerolinecolor:'#ccc'},
+        yaxis: {title:'Started player-weeks', zeroline:true, zerolinecolor:'#ccc'},
         legend: {orientation:'h', y:1.08},
     }, PLY_CONFIG);
 
@@ -269,7 +268,7 @@ function renderQ1(data) {
         ...PLY_LAYOUT_BASE,
         barmode: 'stack',
         margin: {l:130, r:8, t:30, b:30},
-        xaxis: {title:'% of positive value', range:[0,105]},
+        xaxis: {title:'% of started player-weeks', range:[0,105]},
         yaxis: {tickfont:{size:9}},
         legend: {orientation:'h', y:1.08},
     }, PLY_CONFIG);

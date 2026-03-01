@@ -763,69 +763,88 @@ def compute_analysis(year: int) -> dict:
     val_map = season_vals.set_index('cbsid')['Value'].to_dict()
     st['actual_value'] = st['cbsid'].map(val_map).fillna(0)
 
-    # ── Roster + weeks-per-team ─────────────────────────────────────────────
+    # ── Roster with decision column ──────────────────────────────────────────
     roster = pd.read_sql(
-        f"SELECT cbsid, owner_id, week FROM roster WHERE year={year}", engine)
-    first_wk = (roster.groupby(['cbsid','owner_id'])['week'].min()
-                .reset_index().rename(columns={'week': 'first_week'}))
-    wk = (roster.groupby(['cbsid','owner_id']).size().reset_index(name='weeks')
-          .merge(roster.groupby('cbsid')['week'].count().reset_index(name='total_weeks'),
-                 on='cbsid'))
-    wk['fraction'] = wk['weeks'] / wk['total_weeks']
-    wk = wk.merge(st[['cbsid','actual_value']], on='cbsid', how='left')
-    wk['team_value'] = (wk['actual_value'].fillna(0) * wk['fraction']).round(2)
-    wk = wk.merge(first_wk, on=['cbsid','owner_id'], how='left')
+        f"SELECT cbsid, owner_id, week, decision FROM roster WHERE year={year}", engine)
+    roster['owner'] = roster['owner_id'].map(oid_to_name)
 
-    # ── Acquisition source classification ───────────────────────────────────
+    _adds_csv_path   = f'player_projections/data/{year}-adds.csv'
     _trades_csv_path = f'player_projections/data/{year}-trades.csv'
+
+    # Mark drafted players (bought at auction or via supplemental)
+    draft_cbsids = set(
+        all_proj[all_proj['Owner'].notna() & ((all_proj['Paid'] > 0) | (all_proj['Supp'] > 0))]['cbsid'])
+    roster['source'] = roster['cbsid'].apply(lambda x: 'Draft' if x in draft_cbsids else None)
+
+    # Mark FA-add weeks: each add covers [add_week, drop_week] for that owner
+    adds = None
+    if _os.path.exists(_adds_csv_path):
+        adds = pd.read_csv(_adds_csv_path)
+        adds['week'] = adds['period'] + 1
+        for _, add_row in adds.sort_values('week').iterrows():
+            if pd.isna(add_row.get('owner_id')) or pd.isna(add_row.get('cbsid')):
+                continue
+            drop_wk_val = add_row.get('Drop Week', np.nan)
+            drop_wk = 28 if pd.isna(drop_wk_val) else int(drop_wk_val)
+            mask = (
+                (roster['owner_id'] == int(add_row['owner_id'])) &
+                (roster['cbsid']    == int(add_row['cbsid'])) &
+                (roster['week'].between(int(add_row['week']), drop_wk))
+            )
+            roster.loc[mask, 'source'] = 'FA'
+
+    # Mark traded-player weeks: trade is effective from recv_week until dropped
     if _os.path.exists(_trades_csv_path):
         tr_csv = pd.read_csv(_trades_csv_path)
-        traded_pairs: set = set()
         for _, row in tr_csv.iterrows():
             if pd.isna(row.get('owner_id')):
                 continue
-            recv_oid = int(row['owner_id'])
+            recv_oid  = int(row['owner_id'])
+            recv_week = int(row['period']) + 1
             try:
                 for p in _ast.literal_eval(row['parsed_transactions']):
                     cid = _lookup_cbsid(p['Name'], p.get('Position', ''))
-                    if cid is not None:
-                        traded_pairs.add((cid, recv_oid))
+                    if cid is None:
+                        continue
+                    drop_wk = 28
+                    if adds is not None:
+                        drop_rows = adds[(adds['owner_id'] == recv_oid) & (adds['Drop'] == p['Name'])]
+                        if len(drop_rows):
+                            drop_wk = int(drop_rows['week'].iloc[0])
+                    mask = (
+                        (roster['cbsid']    == cid) &
+                        (roster['owner_id'] == recv_oid) &
+                        (roster['week'].between(recv_week, drop_wk))
+                    )
+                    roster.loc[mask, 'source'] = 'Trade'
             except Exception:
                 pass
-
-        def _classify(cbsid, owner_id, fw):
-            if fw == 1: return 'Draft'
-            if (int(cbsid), int(owner_id)) in traded_pairs: return 'Trade'
-            return 'FA'
         sources = ['Draft', 'FA', 'Trade']
     else:
-        def _classify(cbsid, owner_id, fw):
-            return 'Draft' if fw == 1 else 'In-Season'
-        sources = ['Draft', 'In-Season']
+        sources = ['Draft', 'FA']
 
-    wk['source'] = wk.apply(
-        lambda r: _classify(r['cbsid'], r['owner_id'], r['first_week']), axis=1)
-    wk['owner'] = wk['owner_id'].map(oid_to_name)
+    # Any remaining unclassified player-weeks → FA
+    roster.loc[roster['source'].isna(), 'source'] = 'FA'
 
-    # ── Q1: Value by source ─────────────────────────────────────────────────
-    q1_raw = wk.groupby(['owner','source'])['team_value'].sum().unstack(fill_value=0)
+    # ── Q1: Player-weeks by source (starters only) ──────────────────────────
+    starters = roster[roster['decision'] == 'start']
+    pw = starters.groupby(['owner', 'source'])['cbsid'].count().unstack(fill_value=0)
     for s in sources:
-        if s not in q1_raw.columns:
-            q1_raw[s] = 0.0
-    q1_raw['Total'] = q1_raw[sources].sum(axis=1)
-    pos_denom = q1_raw[sources].clip(lower=0).sum(axis=1).replace(0, np.nan)
+        if s not in pw.columns:
+            pw[s] = 0
+    pw['total'] = pw[sources].sum(axis=1)
     q1_out = []
-    for owner in q1_raw.index:
-        row = {'owner': owner, 'total': round(float(q1_raw.loc[owner,'Total']), 1)}
+    for owner in pw.index:
+        total = int(pw.loc[owner, 'total'])
+        row = {'owner': owner, 'total': total}
         for s in sources:
-            val = float(q1_raw.loc[owner, s])
-            pct = (max(val, 0) / float(pos_denom[owner])
-                   if pd.notna(pos_denom[owner]) else 0) * 100
-            key = s.lower().replace('-','_').replace(' ','_')
-            row[key]          = round(val, 1)
-            row[f'{key}_pct'] = round(pct, 1)
+            cnt = int(pw.loc[owner, s])
+            pct = round(cnt / total * 100, 1) if total > 0 else 0.0
+            key = s.lower().replace('-', '_').replace(' ', '_')
+            row[key]          = cnt
+            row[f'{key}_pct'] = pct
         q1_out.append(row)
-    q1_out.sort(key=lambda x: -x['total'])
+    q1_out.sort(key=lambda x: -x.get('draft', 0))
 
     # ── Q2: Trade winners ───────────────────────────────────────────────────
     rs = roster.merge(raw_stats, on=['cbsid','week'], how='left')
