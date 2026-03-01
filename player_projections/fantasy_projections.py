@@ -297,6 +297,7 @@ class FantasyProjections:
         )
         
         logger.info(f"Using {period_name or 'this period'} as its own baseline")
+        print(f"Using {period_name or 'this period'} as its own baseline")
         
         # Set as current qualifiers
         #period_qualifiers = self.calculate_qualifiers(...)
@@ -1004,7 +1005,7 @@ class FantasyProjections:
                 
                 qual_pitchers = pitching[
                     ((pitching['Primary_Pos'] == 'SP') & (pitching['IP'] >= sp_cutoff)) |
-                    ((pitching['Primary_Pos'] == 'RP') & (pitching['IP'].between(45,95)) & (pitching.get('SvHld', 0) > 5))
+                    ((pitching['Primary_Pos'] == 'RP') & (pitching['IP'].between(rp_ip_range[0], rp_ip_range[1])) & (pitching.get('SvHld', 0) > min_sv_hld))
                 ].copy()
             else:
                 ip_cutoff = pitching[pitching['IP'] > 0]['IP'].quantile(pitching_percentile)
