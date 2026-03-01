@@ -25,6 +25,7 @@ engine = create_engine('sqlite:///fantasy_data.db', echo=False)
 Session = sessionmaker(bind=engine)
 session = Session()
 
+year = datetime.now().year
 n_teams = 12
 tm_players = 23
 tm_dollars = 260
@@ -202,10 +203,19 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
     h['cbsid'] = h['cbsid'].astype(int)
     h.loc[h['Primary_Pos'].isin(['C', '1B', '2B', '3B', 'OF', 'DH', 'SS']), 'PosClass'] = 'h'
     h.fillna({'PosClass':'p'}, inplace=True)
-    h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/n_teams
+    #h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/n_teams
     
+    stats_2_years_prior_h = pd.read_csv(f'player_projections/data/{year-2}-final-stats-h.csv')
+    stats_2_years_prior_h.rename(columns={'AVG':'BA'},inplace=True)
+    stats_2_years_prior_p = pd.read_csv(f'player_projections/data/{year-2}-final-stats-p.csv')
+    stats_2_years_prior_p.rename(columns={'INNs':'IP'},inplace=True)
+
+    h = h.merge(stats_2_years_prior_h[['cbsid', 'PA', 'AB', 'R', 'H', 'HR', 'RBI', 'SB', 'BA']], on='cbsid', how='left', suffixes=[None,'_2ly'])
+    h = h.merge(stats_2_years_prior_p[['cbsid', 'IP', 'GS', 'ER', 'BB', 'HA', 'SO', 'QS', 'W', 'SvHld', 'ERA', 'WHIP']], on='cbsid', how='left', suffixes=[None,'_2ly'])
+    h.rename(columns={'AVG_2ly':'BA_2ly'}, inplace=True)
+
     avg_stats = {}
-    for a,b in (h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/12).reset_index(name='mean').iterrows():
+    for a,b in (h[(h['z']>0) & (h['PosClass']=='h')][['HR', 'SB', 'R', 'RBI', 'BA', 'H', 'AB']].sum()/n_teams).reset_index(name='mean').iterrows():
         avg_stats[b['index']] = round(b['mean'],1)
     avg_stats['BA'] = round(avg_stats['H']/avg_stats['AB'],3)
 
