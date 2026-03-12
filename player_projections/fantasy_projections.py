@@ -392,6 +392,14 @@ class FantasyProjections:
         # Combine back with existing cbsid records
         combined = pd.concat([has_cbsid, merged_cbsid], ignore_index=True)
 
+        # Fill Age for has_cbsid players that are missing it
+        if 'Age' not in combined.columns or combined['Age'].isna().any():
+            age_lookup = self.player_index[['cbsid', 'Age']].dropna(subset=['cbsid'])
+            combined = combined.merge(age_lookup, on='cbsid', how='left', suffixes=[None, '_pi'])
+            if 'Age_pi' in combined.columns:
+                combined['Age'] = combined['Age'].fillna(combined['Age_pi'])
+                combined.drop(columns=['Age_pi'], inplace=True)
+
         # Now average by cbsid
         averaged = self.average_projections(combined, 'hitting')
         
@@ -433,13 +441,21 @@ class FantasyProjections:
         # MAP TO CBS IDs BEFORE AVERAGING (important!)
         missing_cbsid = combined.loc[combined['cbsid'].isna()].reset_index(drop=True)
         has_cbsid = combined.loc[combined['cbsid'].notna()].reset_index(drop=True)
-        merged_cbsid = missing_cbsid.merge(self.player_index[['cbsid', 'CBSNAME', 'IDFANGRAPHS', 'IDFANGRAPHS_minors']], left_on='playerid', right_on='IDFANGRAPHS', how='inner', suffixes=[None,'_y'])
+        merged_cbsid = missing_cbsid.merge(self.player_index[['cbsid', 'CBSNAME', 'Age', 'IDFANGRAPHS', 'IDFANGRAPHS_minors']], left_on='playerid', right_on='IDFANGRAPHS', how='inner', suffixes=[None,'_y'])
         merged_cbsid = merged_cbsid.fillna({'cbsid':merged_cbsid['cbsid_y'], 'CBSNAME':merged_cbsid['CBSNAME_y']})
         merged_cbsid.drop(columns=['CBSNAME_y', 'cbsid_y', 'IDFANGRAPHS', 'IDFANGRAPHS_minors'],inplace=True)
 
         # Combine back with existing cbsid records
         combined = pd.concat([has_cbsid, merged_cbsid], ignore_index=True)
-        
+
+        # Fill Age for has_cbsid players that are missing it
+        if 'Age' not in combined.columns or combined['Age'].isna().any():
+            age_lookup = self.player_index[['cbsid', 'Age']].dropna(subset=['cbsid'])
+            combined = combined.merge(age_lookup, on='cbsid', how='left', suffixes=[None, '_pi'])
+            if 'Age_pi' in combined.columns:
+                combined['Age'] = combined['Age'].fillna(combined['Age_pi'])
+                combined.drop(columns=['Age_pi'], inplace=True)
+
         # Now average by cbsid
         averaged = self.average_projections(combined, 'pitching')
         
