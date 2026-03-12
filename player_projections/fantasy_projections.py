@@ -700,7 +700,9 @@ class FantasyProjections:
         """
         # Columns that identify the player (don't average)
         id_cols = ['cbsid', 'playerid', 'CBSNAME', 'Name', 'Team', 'Pos']
-        
+        if 'Age' in df.columns:
+            id_cols = id_cols + ['Age']
+
         # Find all numeric columns
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         
