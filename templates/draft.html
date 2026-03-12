@@ -112,7 +112,7 @@
                         </tr>
                         {% for i, row in owners_df.iterrows() %}
                         <tr>
-                            <td{% if row['Owner'] == 'Lima Time' %} class="my-team"{% endif %}>{{ row['Owner'] }}</td>
+                            <td{% if row['Owner'] == 'Lima Time!' %} class="my-team"{% endif %}>{{ row['Owner'] }}</td>
                             <td id="{{ row['Owner']|replace(' ','_') }}_meter">{{ row['Cash'] }}</td>
                         </tr>
                         {% endfor %}
@@ -200,7 +200,7 @@
                                     <th onclick="sortTable(19, 'myTable')">SvHld</th>
                                 </thead>
                             {% for i, row in owners_df.iterrows() %}
-                                <tr id="summary_{{ row['Owner'] }}" {% if row['Owner'] == 'Lima Time' %}class="my-team-row"{% endif %}>
+                                <tr id="summary_{{ row['Owner'] }}" {% if row['Owner'] == 'Lima Time!' %}class="my-team-row"{% endif %}>
                                     <td>{{ row['Owner'] }}</td>
                                     <td>{{ row['Cash'] }}</td>
                                     <td>{{ row['$ Left'] }}</td>
@@ -237,32 +237,33 @@
                                     <th>Pos</th>
                                     <th>9 Grand Kids</th>
                                     <th>Brewbirds</th>
-                                    <th>Charmer</th>
-                                    <th>Dirty Birds</th>
+                                    <th>Chicos Bail Bonds</th>
+                                    <th>Foul Balls</th>
                                     <th>Harvey</th>
-                                    <th class="col-my-team">Lima Time</th>
+                                    <th class="col-my-team">Lima Time!</th>
                                     <th>Mother</th>
+                                    <th>Bucks</th>
                                     <th>Roid Ragers</th>
                                     <th>Trouble</th>
                                     <th>Ugly Spuds</th>
                                     <th>Wu-Tang</th>
-                                    <th>Young Guns</th>
                                 </thead>
                                 {% for i, row in roster.iterrows() %}
                                     <tr>
                                         <td>{{ i }}</td>
                                         <td>{{ row['9 Grand Kids'] if row['9 Grand Kids'] != 0 else '' }}</td>
                                         <td>{{ row['Brewbirds'] if row['Brewbirds'] != 0 else '' }}</td>
-                                        <td>{{ row['Charmer'] if row['Charmer'] != 0 else '' }}</td>
-                                        <td>{{ row['Dirty Birds'] if row['Dirty Birds'] != 0 else '' }}</td>
-                                        <td>{{ row['Harvey'] if row['Harvey'] != 0 else '' }}</td>
-                                        <td class="col-my-team">{{ row['Lima Time'] if row['Lima Time'] != 0 else '' }}</td>
-                                        <td>{{ row['Mother'] if row['Mother'] != 0 else '' }}</td>
+                                        <td>{{ row['Chicos Bail Bonds'] if row['Chicos Bail Bonds'] != 0 else '' }}</td>
+                                        <td>{{ row['Foul Balls'] if row['Foul Balls'] != 0 else '' }}</td>
+                                        <td>{{ row['Harveys Wallbangers'] if row['Harveys Wallbangers'] != 0 else '' }}</td>
+                                        <td class="col-my-team">{{ row['Lima Time!'] if row['Lima Time!'] != 0 else '' }}</td>
+                                        <td>{{ row["Mom's Cookin"] if row["Mom's Cookin"] != 0 else '' }}</td>
+                                        <td>{{ row["Peter's Bucks"] if row["Peter's Bucks"] != 0 else '' }}</td>
                                         <td>{{ row['Roid Ragers'] if row['Roid Ragers'] != 0 else '' }}</td>
-                                        <td>{{ row['Trouble'] if row['Trouble'] != 0 else '' }}</td>
+                                        <td>{{ row['Trouble with the Curve'] if row['Trouble with the Curve'] != 0 else '' }}</td>
                                         <td>{{ row['Ugly Spuds'] if row['Ugly Spuds'] != 0 else '' }}</td>
-                                        <td>{{ row['Wu-Tang'] if row['Wu-Tang'] != 0 else '' }}</td>
-                                        <td>{{ row['Young Guns'] if row['Young Guns'] != 0 else '' }}</td>
+                                        <td>{{ row['Lil Trumps Wiscompton Wu-Tang'] if row['Lil Trumps Wiscompton Wu-Tang'] != 0 else '' }}</td>
+                                        
                                     </tr>
                                 {% endfor %}
                             </table>
@@ -346,7 +347,7 @@
                                     <th>QS</th>
                                     <th>SvHld</th>
                                 </thead>
-                            {% for i, row in players[(players['Owner'].isna())].sort_values('surplus', ascending=False).iterrows() %}
+                            {% for i, row in surplus_players.iterrows() %}
                             <tr>
                                 <td>{{ row['Name'] }}</td>
                                 <td>{{ row['Team'] }}</td>
