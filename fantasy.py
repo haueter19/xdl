@@ -39,7 +39,7 @@ total_z_over_0 = pd.read_sql(f'SELECT sum(z) z FROM players{str(datetime.now().y
 #total_z_over_0 = 626.134#701.39442#591.1999720030974
 orig_conv =  (tm_dollars/tm_players)*(tot_players/total_z_over_0)
 print(f"starting conv_factor: {orig_conv}")
-owner_list = ["9 Grand Kids", 'Brewbirds', 'Charmer', 'Dirty Birds', 'Harvey', 'Lima Time', 'Mother', 'Roid Ragers', 'Trouble', 'Ugly Spuds', 'Wu-Tang', 'Young Guns']
+owner_list = ["9 Grand Kids", 'Brewbirds', 'Chicos Bail Bonds', 'Foul Balls', 'Harveys Wallbangers', 'Lima Time!', "Mom's Cookin", "Peter's Bucks", 'Roid Ragers', 'Trouble with the Curve', 'Ugly Spuds', 'Lil Trumps Wiscompton Wu-Tang']
 # owner_sort = [i[1] for i in enumerate(owners.keys())]
 
 drafted_by_pos = {
@@ -284,6 +284,7 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
     h['surplus'] = round(h['Value'] - h['CBS'],2)
     
     return templates.TemplateResponse('draft.html', {'request':request, 'players':h.sort_values('z', ascending=False), 
+                                    'surplus_players':h[(h['Owner'].isna()) & (h['surplus'] > 0) & (h['z'] > -5)].sort_values('surplus', ascending=False),
                                     'status':status,
                                     'owned':h[h['Owner'].notna()], 'owners_df':owners_df.sort_values('Rank', ascending=False), 'roster':roster, 'roster_json':roster.to_json(orient='records'),
                                     'owner_list': owner_list,
@@ -302,7 +303,13 @@ async def draft_view(request: Request, status: Optional[str] = 'ok'):
 @app.get("/draft/update_bid")
 async def update_db(cbsid=int, owner=str, price=int, supp=Optional[int] == 0):
     print(f"Endpoint triggered for cbsid: {cbsid}, owner: {owner}")
-    df = pd.read_sql(f"SELECT cbsid, Name, '{owner}' As Owner, Pos, COALESCE(Paid,{price},0) Paid, Supp, Team, Timestamp, Keeper, Value FROM players{datetime.now().year} WHERE Owner='{owner}' or cbsid={cbsid}", engine)
+    df = pd.read_sql(f"""
+                     SELECT 
+                        cbsid, Name, :owner As Owner, Pos, COALESCE(Paid,:price,0) Paid, Supp, Team, Timestamp, Keeper, Value 
+                     FROM players{datetime.now().year} 
+                     WHERE 
+                        Owner=:owner or cbsid=:cbsid
+                    """, engine, params={"owner": owner, "price": price, "cbsid": cbsid})
     df.loc[df['cbsid']==int(cbsid), ['Paid', 'Supp']] = [int(price), int(supp)]
    
     player = df[df['cbsid']==int(cbsid)].iloc[0][['cbsid', 'Name', 'Owner', 'Pos', 'Paid', 'Supp', 'Team', 'Timestamp', 'Keeper', 'Value']].to_dict()
