@@ -40,7 +40,7 @@ $.fn.z_players = function(){
             if (data[i]['Owner']){
                 color_map.push('gray');
             } else {
-                if (data[i]['surplus']>6){
+                if (data[i]['surplus']>6 & data[i]['z']>-5){
                     color_map.push('green');
                 } else {
                     color_map.push('lightblue');
@@ -70,6 +70,7 @@ $.fn.z_players = function(){
 $.fn.tiers = function(){
     let x_data = [];
     let y_data = [];
+    let max_value = 0;
     let hover_data = [];
     let p_id = [];
     let color_map = [];
@@ -95,11 +96,14 @@ $.fn.tiers = function(){
             if (sortedData[i]['Owner']){
                 color_map.push('gray');
             } else {
-                if (sortedData[i]['surplus']>6){
+                if (sortedData[i]['surplus']>5 & sortedData[i]['z']>-5){
                     color_map.push('green');
                 } else {
                     color_map.push('lightblue');
                 }
+            }
+            if (v['Value']>max_value & v.Owner==null){
+                max_value = v['Value'];
             }
         }
         //j += 1
@@ -119,7 +123,7 @@ $.fn.tiers = function(){
             
         }
     ]
-    layout = {title: "Positional Tiers", hovermode:'closest', height: 500, width: 1300, margin: {l:20, t:30}, yaxis: {range: [-15,45]},
+    layout = {title: "Positional Tiers", hovermode:'closest', height: 500, width: 1300, margin: {l:20, t:30}, yaxis: {range: [-15,max_value+5]},
     shapes: [
             {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 35.7, y1: 35.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
             {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 27.6, y1: 27.6, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
@@ -197,13 +201,15 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SO']+'</td>'
         +'<td>'+data[selected_index]['QS']+'</td>'
         +'<td>'+data[selected_index]['SvHld']+'</td>'
+        +'<td>'+data[selected_index]['K-BB%']+'</td>'
+        +'<td>'+data[selected_index]['K/9']+'</td>'
         +'</tr><tr><td>'+previousYear+'</td>'
-        +'<td>'+(data[selected_index]['p_out_ly']/3).toFixed(1)+'</td>'
-        +'<td>'+data[selected_index]['p_era_ly']+'</td>'
-        +'<td>'+Number(data[selected_index]['p_whip_ly']).toFixed(2)+'</td>'
-        +'<td>'+data[selected_index]['p_strikeout_ly']+'</td>'
-        +'<td>'+data[selected_index]['p_quality_start_ly']+'</td>'
-        +'<td>'+data[selected_index]['p_SvHld_ly']+'</td>'
+        +'<td>'+(data[selected_index]['IP_ly']).toFixed(1)+'</td>'
+        +'<td>'+data[selected_index]['ERA_ly']+'</td>'
+        +'<td>'+Number(data[selected_index]['WHIP_ly']).toFixed(2)+'</td>'
+        +'<td>'+data[selected_index]['SO_ly']+'</td>'
+        +'<td>'+data[selected_index]['QS_ly']+'</td>'
+        +'<td>'+data[selected_index]['SvHld_ly']+'</td>'
         +'<td>'+(data[selected_index]['K-BB%_ly']*100).toFixed(1)+'%</td>'
         +'<td>'+Number(data[selected_index]['K/9_ly']).toFixed(1)+'</td>'
         +'<td>'+data[selected_index]['fastball_avg_speed_ly']+'</td>'
@@ -214,12 +220,12 @@ $.fn.update_player_stats_window = function(selected_index){
         +'</tr>'
         // 2 years ago
         +'<tr><td>'+twoYearsAgo+'</td>'
-        +'<td>'+(data[selected_index]['p_out_2ly']/3).toFixed(1)+'</td>'
-        +'<td>'+data[selected_index]['p_era_2ly']+'</td>'
-        +'<td>'+Number(data[selected_index]['p_whip_2ly']).toFixed(2)+'</td>'
-        +'<td>'+data[selected_index]['p_strikeout_2ly']+'</td>'
-        +'<td>'+data[selected_index]['p_quality_start_2ly']+'</td>'
-        +'<td>'+data[selected_index]['p_SvHld_2ly']+'</td>'
+        +'<td>'+(data[selected_index]['IP_2ly']/3).toFixed(1)+'</td>'
+        +'<td>'+data[selected_index]['ERA_2ly']+'</td>'
+        +'<td>'+Number(data[selected_index]['WHIP_2ly']).toFixed(2)+'</td>'
+        +'<td>'+data[selected_index]['SO_2ly']+'</td>'
+        +'<td>'+data[selected_index]['QS_2ly']+'</td>'
+        +'<td>'+data[selected_index]['SvHld_2ly']+'</td>'
         +'<td>'+(data[selected_index]['K-BB%_2ly']*100).toFixed(1)+'%</td>'
         +'<td>'+Number(data[selected_index]['K/9_2ly']).toFixed(1) +'</td>'
         +'<td>'+data[selected_index]['fastball_avg_speed_2ly']+'</td>'
@@ -282,7 +288,7 @@ function bid_amounts(id){
     const val = get_val_from_id(id);
     for (key in owners){
         let bid = val*owners[key]["Cash"];
-        let o = owners[key]['Owner'].replace(' ','_');
+        let o = owners[key]['Owner'].replace(' ','_').replace('!','').replace("'",'');
         $("#"+o+"_meter").text(bid.toFixed(0));
     }
 }
