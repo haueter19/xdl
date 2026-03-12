@@ -33,7 +33,7 @@ class Scraper():
         self.chromedriver_path = r"C:\ProgramData\Anaconda3\WebDriver\bin\chromedriver.exe"
         self.download_path = r'C:\Users\pddnh\Downloads'
         self.downloaded_fangraphs_filename = 'fangraphs-leaderboard-projections.csv'
-        self.destination_path = r"C:\GitHub\xdl\data"
+        self.destination_path = r"C:\GitHub\xdl\player_projections\data"
         self.cbs_login_url = 'https://www.cbssports.com/login?master_product=150&xurl=https%3A%2F%2Fwww.cbssports.com%2Flogin'
         self.fangraphs_login_url = 'https://blogs.fangraphs.com/wp-login.php'
         self.cbs_ros_proj_url_h = 'https://xdl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:MI:CI:OF:DH/restofseason:p/standard/projections?print_rows=9999'
@@ -81,7 +81,8 @@ class Scraper():
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
-        CBS_LOGIN = os.getenv('CBS_LOGIN')
+        #CBS_LOGIN = os.getenv('CBS_LOGIN')
+        CBS_LOGIN = 'danhaueter19@gmail.com'
         CBS_PASSWORD = os.getenv('CBS_PASSWORD')
 
         # Navigate to the CBS login page
@@ -237,8 +238,8 @@ class Scraper():
             for col in ['AVG', 'OBP', 'SLG']:
                 df[col] = df[col].astype(float)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
-            df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-projections-{stats_type}.csv', index=False)
-            print(f'{datetime.now().year}-cbs-projections-{stats_type}.csv saved in {self.destination_path}')
+            df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
+            print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
         if stats_type=='p':
             # Be sure to convert all columns to appropriate data types
             for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
@@ -248,8 +249,8 @@ class Scraper():
             df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
             # Save to csv if projected IP > 0
-            df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-projections-{stats_type}.csv', index=False)
-            print(f'{datetime.now().year}-cbs-projections-{stats_type}.csv saved in {self.destination_path}')
+            df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
+            print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
 
         return df
 
