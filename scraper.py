@@ -179,7 +179,16 @@ class Scraper():
         return df
     
 
-    def cbs_projections(self, stats_type: str ='h') -> pd.DataFrame:
+    def cbs_projections(self, stats_type: str ='h', preseason: bool = True) -> pd.DataFrame:
+        """Scrape CBS projections for hitters or pitchers. stats_type should be 'h' for hitters and 'p' for pitchers."""
+        if not preseason:
+            opening_week = datetime(2026, 3, 23).isocalendar().week # <-- Must change each year. Should be the Monday of the first week of games
+            cur_week = datetime.now().isocalendar().week
+            if cur_week < opening_week:
+                period = 0
+            else:
+                period = cur_week - opening_week + 1
+        
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
@@ -238,8 +247,12 @@ class Scraper():
             for col in ['AVG', 'OBP', 'SLG']:
                 df[col] = df[col].astype(float)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
-            df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
-            print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            if preseason:
+                df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
+                print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            else:
+                df.to_csv(f'{self.destination_path}/{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv', index=False)
+                print(f'{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv saved in {self.destination_path}')
         if stats_type=='p':
             # Be sure to convert all columns to appropriate data types
             for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
@@ -249,10 +262,15 @@ class Scraper():
             df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
             # Save to csv if projected IP > 0
-            df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
-            print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            if preseason:
+                df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
+                print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            else:
+                df.to_csv(f'{self.destination_path}/{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv', index=False)
+                print(f'{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv saved in {self.destination_path}')
 
         return df
+    
 
 
     def fangraphs_projections(self, system_name, stats_type='h', statgroup='fantasy', fantasypreset='roto5x5'):
