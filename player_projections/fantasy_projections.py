@@ -949,12 +949,13 @@ class FantasyProjections:
                 statcast = pd.read_csv(statcast_path, encoding='latin-1')
                 statcast = self.standardize_columns(statcast, player_type)
                 statcast['IDFANGRAPHS'] = statcast['playerid'].astype(str)
+                statcast.rename(columns={'GS':'GS_sc'},inplace=True)
                 statcast = statcast.merge(self.player_index[['cbsid', 'IDFANGRAPHS']], on='IDFANGRAPHS', how='inner')
 
                 if player_type == 'hitting':
                     statcast = statcast[['cbsid', 'IDFANGRAPHS', 'Age_ly', 'Barrel%', 'EV', 'maxEV', 'ISO_ly', 'Hard%+', 'xBA', 'xwOBA', 'wOBA_ly', 'wRC+_ly', 'O-Swing%', 'Contact%', 'BABIP_ly', 'PA_sc', 'sprint_speed', 'CSW%']]
                 else:
-                    statcast = statcast[['cbsid', 'IDFANGRAPHS', 'Age_ly', 'TBF', 'K%', 'BB%', 'K-BB%_ly', 'FBv', 'Stuff+',  'Location+', 'Pitching+', 'ERA-', 'FIP-', 'xFIP-', 'xERA', 'FIP_ly', 'botERA', 'CSW%']]
+                    statcast = statcast[['cbsid', 'IDFANGRAPHS', 'Age_ly', 'TBF', 'K%', 'BB%', 'K-BB%_ly', 'FBv', 'Stuff+',  'Location+', 'Pitching+', 'ERA-', 'FIP-', 'xFIP-', 'xERA', 'FIP_ly', 'botERA', 'CSW%', 'Pitches', 'GS_sc']]
                 #merge_cols = ['cbsid'] + [c for c in statcast.columns if c not in df.columns and c != 'cbsid']
                 
                 df = df.merge(statcast, on='cbsid', how='left')
