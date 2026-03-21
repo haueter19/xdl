@@ -80,7 +80,7 @@ class FantasyProjections:
         # Data storage
         self.player_index = None
         self.hitting_projections = None
-        self.pitching_projections = None
+        self.pitchieng_projections = None
         self.qualifiers = None
         self.draft_qualifiers = None
         self.draft_values = None
