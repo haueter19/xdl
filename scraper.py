@@ -93,7 +93,7 @@ class Scraper():
         driver = self._get_driver()
         
         #CBS_LOGIN = os.getenv('CBS_LOGIN')
-        CBS_LOGIN = 'danhaueter19@gmail.com'
+        CBS_LOGIN = os.getenv('CBS_EMAIL')
         CBS_PASSWORD = os.getenv('CBS_PASSWORD')
 
         # Navigate to the CBS login page
@@ -112,7 +112,7 @@ class Scraper():
         
         # Click the "Continue" button
         continue_button.click()
-
+        time.sleep(self.SHORT_WAIT)
         if 'confirmed' in driver.current_url:
             return driver
         else:
@@ -229,10 +229,10 @@ class Scraper():
         # Save to csv
         if stats_type=='h':
             # Be sure to convert all columns to appropriate data types
-            #for col in ['AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'Rank']:
-                #df[col] = df[col].astype(int)
-            #for col in ['AVG', 'OBP', 'SLG']:
-                #df[col] = df[col].astype(float)
+            for col in ['AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'Rank']:
+                df[col] = df[col].astype(float)
+            for col in ['AVG', 'OBP', 'SLG']:
+                df[col] = df[col].astype(float)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
             if proj_type == 'preseason':
                 # If preseason, only want to save the CSV
@@ -244,10 +244,10 @@ class Scraper():
                 print(f'{filename} saved in {self.destination_path}')
         if stats_type=='p':
             # Be sure to convert all columns to appropriate data types
-            #for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
-                #df[col] = df[col].astype(int)
-            #for col in ['ERA', 'WHIP']:
-                #df[col] = df[col].astype(float)
+            for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
+                df[col] = df[col].astype(float)
+            for col in ['ERA', 'WHIP']:
+                df[col] = df[col].astype(float)
             df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
             # Save to csv if projected IP > 0
