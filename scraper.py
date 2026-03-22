@@ -233,7 +233,9 @@ class Scraper():
                 df[col] = df[col].astype(float)
             for col in ['AVG', 'OBP', 'SLG']:
                 df[col] = df[col].astype(float)
-            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
+            df.rename(columns={'Positions':'Pos'}, inplace=True)
+            df['PA'] = df['AB'] + df['BB']
+            df = df[['cbsid', 'CBSNAME', 'Pos', 'Team', 'PA', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
             if proj_type == 'preseason':
                 # If preseason, only want to save the CSV
                 df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
@@ -248,8 +250,11 @@ class Scraper():
                 df[col] = df[col].astype(float)
             for col in ['ERA', 'WHIP']:
                 df[col] = df[col].astype(float)
-            df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
-            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
+            df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD', 'H':'HA','Positions':'Pos'}, inplace=True)
+            df['SvHld'] = df['SV'] + df['HLD']
+            df['ER'] = round(df['ERA'] * df['IP'] / 9, 2)
+            df = df[['cbsid', 'CBSNAME', 'Pos', 'Team', 'IP', 'QS', 'W', 'L', 'SvHld', 'ERA', 'WHIP', 'ER', 'K', 'BB', 'HA', 'Rank']]
+            
             # Save to csv if projected IP > 0
             if proj_type == 'preseason':
                 # If preseason, only want to save the CSV
@@ -380,6 +385,51 @@ class Scraper():
             .to_sql('eligibility', con=self.engine, if_exists='append', index=False)
 
         return elig
+
+    
+    def get_weekly_sit_or_start_by_owner(self, owner_id: int, start_period: int, current_period: int, last_week: int = 28) -> pd.DataFrame:
+        """Scrape CBS eligibility page to get weekly sit/start info for a given owner_id and period range"""
+        driver = self._get_driver()
+        driver.get(f"https://xdl.baseball.cbssports.com/teams/{owner_id}")
+        time.sleep(1.2)
+        driver.execute_script("window.scrollTo(0, 0);")
+        
+        data = pd.DataFrame()
+        for wk in range(start_period, current_period):
+            if wk==1:
+                try:
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='Off Season']").click()
+                except:
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='{current_period}']").click()
+                driver.implicitly_wait(4)
+                driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/ul/li[@value='/teams/roster-report/{owner_id}/1/']").click()
+            elif wk==last_week:
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(.5)        
+                driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='OFF SEASON']").click()
+                time.sleep(2)
+                elem = driver.find_elements(By.XPATH, f"//div[@class ='select_form_div darkFilter']/ul/li")
+                driver.implicitly_wait(4)
+                time.sleep(2)
+                for e in elem:
+                    if e.text==str(wk):
+                        e.click()
+            else:
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(.5)
+                try: # if running through all periods
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='{wk-1}']").click()
+                    time.sleep(2)
+                except: # if just doing the most recent week
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='{current_period}']").click()
+                    time.sleep(2)
+                elem = driver.find_elements(By.XPATH, f"//div[@class ='select_form_div darkFilter']/ul/li")
+                driver.implicitly_wait(4)
+                time.sleep(2)
+                for e in elem:
+                    if e.text==str(wk):
+                        e.click()
+
 
     def _process_eligibility(self, val: int, driver: Chrome) -> pd.DataFrame:
         """Helper function to process eligibility for a given owner_id and return a DataFrame."""
