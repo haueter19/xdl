@@ -190,31 +190,27 @@ class Scraper():
         return df
     
 
-    def cbs_projections(self, stats_type: str ='h', preseason: bool = True) -> pd.DataFrame:
-        """Scrape CBS projections for hitters or pitchers. stats_type should be 'h' for hitters and 'p' for pitchers."""
-        if not preseason:
-            opening_week = datetime(2026, 3, 23).isocalendar().week # <-- Must change each year. Should be the Monday of the first week of games
-            cur_week = datetime.now().isocalendar().week
-            if cur_week < opening_week:
-                period = 0
-            else:
-                period = cur_week - opening_week + 1
-        
+    def cbs_projections(self, stats_type: str ='h', proj_type: str = 'preseason', period: int = 0) -> pd.DataFrame:
+        """Scrape CBS projections for hitters or pitchers. stats_type should be 'h' for hitters and 'p' for pitchers.
+        """
+        if period is None:
+            raise ValueError("Period must be specified as 'preseason' or an integer between 1 and 27.")
+        if proj_type in ['preseason', 'ros']:
+            preseason = True if proj_type == 'preseason' else False
+            filename = f'{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv'
+            url = self.cbs_ros_proj_url_h if stats_type == 'h' else self.cbs_ros_proj_url_p
+        else:
+            preseason = False
+            filename = f'{datetime.now().year}-period-{period}-projections-{stats_type}.csv'
+            url = self.cbs_ros_proj_url_h.replace('restofseason:p', f'{period}') if stats_type == 'h' else self.cbs_ros_proj_url_p.replace('restofseason:p', f'{period}')
+
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
-        if stats_type == 'h':
-            print(f"Stats type: {stats_type}")
-            print(f"Accessing URL: {self.cbs_ros_proj_url_h}")
-            driver.get(self.cbs_ros_proj_url_h)
-        elif stats_type == 'p':
-            print(f"Stats type: {stats_type}")
-            print(f"Accessing URL: {self.cbs_ros_proj_url_p}")
-            driver.get(self.cbs_ros_proj_url_p)
-        else:
-            print(f"Invalid stats type: {stats_type}")
-            #driver.quit()
-            return
+        #if stats_type == 'h':
+        print(f"Stats type: {stats_type}")
+        print(f"Accessing URL: {url}")
+        driver.get(url)
         
         time.sleep(self.SHORT_WAIT)
         try:
@@ -226,60 +222,43 @@ class Scraper():
             #driver.quit()
             return
 
-        # Get the HTML of the page
+        # Get the page source and parse with BeautifulSoup
         html = driver.page_source
-        soup = bs4(html, 'html.parser')
-        # Find the specific table you want
-        table = soup.find('table', {'class': 'data'})
-        # Use pandas to read the HTML table skipping 4 rows to get to actual table
-        for n in [4,1,2,3]:
-            df = pd.read_html(StringIO(str(table)), header=1, skiprows=n, extract_links='body')[0]
-            if 'Action' in df.columns:
-                break
-        
-        # Remove last row and first 2 columns
-        df = df.iloc[:-1, 2:]
-        # Apply a lambda function to each column to extract the first element of each tuple
-        df = df.apply(lambda col: [v[0] if v[1] is None else v for v in col])
-        # Define the regex pattern
-        pattern = r'^(?P<FullName>[A-Za-z\.\'\-\s]+) (?P<Positions>[A-Z0-9,]+) • (?P<Team>[A-Z]+)$'
-        # Extract the player name and ID
-        df['player'] = df['Player'].apply(lambda x: x[0])
-        df['id'] = df['Player'].apply(lambda x: x[1])
-        # Parse id for cbsid
-        df['cbsid'] = df['id'].apply(lambda x: int(x.replace('/players/playerpage/', '')))
-        # Use regex to parse out CBSNAME, Pos, and Team
-        df[['CBSNAME', 'Positions', 'Team']] = df['player'].str.extract(pattern)
+        df = self._process_from_source(html)
+
         # Save to csv
         if stats_type=='h':
             # Be sure to convert all columns to appropriate data types
-            for col in ['AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'Rank']:
-                df[col] = df[col].astype(int)
-            for col in ['AVG', 'OBP', 'SLG']:
-                df[col] = df[col].astype(float)
+            #for col in ['AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'Rank']:
+                #df[col] = df[col].astype(int)
+            #for col in ['AVG', 'OBP', 'SLG']:
+                #df[col] = df[col].astype(float)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
-            if preseason:
+            if proj_type == 'preseason':
+                # If preseason, only want to save the CSV
                 df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
                 print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
             else:
-                df.to_csv(f'{self.destination_path}/{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv', index=False)
-                print(f'{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv saved in {self.destination_path}')
+                # Save a csv backup                
+                df[df['AB']>1].to_csv(f'{self.destination_path}/{filename}', index=False)
+                print(f'{filename} saved in {self.destination_path}')
         if stats_type=='p':
             # Be sure to convert all columns to appropriate data types
-            for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
-                df[col] = df[col].astype(int)
-            for col in ['ERA', 'WHIP']:
-                df[col] = df[col].astype(float)
+            #for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
+                #df[col] = df[col].astype(int)
+            #for col in ['ERA', 'WHIP']:
+                #df[col] = df[col].astype(float)
             df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
             df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
             # Save to csv if projected IP > 0
-            if preseason:
+            if proj_type == 'preseason':
+                # If preseason, only want to save the CSV
                 df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
                 print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
             else:
-                df.to_csv(f'{self.destination_path}/{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv', index=False)
-                print(f'{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv saved in {self.destination_path}')
-
+                # Save a csv backup
+                df[df['IP']>0].to_csv(f'{self.destination_path}/{filename}', index=False)
+                print(f'{filename} saved in {self.destination_path}')
         return df
     
 
@@ -461,3 +440,31 @@ class Scraper():
         position_priority = ['C', '2B', '3B', 'SS', 'OF', '1B', 'MI', 'CI', 'DH', 'SP', 'RP']
         pos_code = row[position_priority+['P']]>=5
         return list(pos_code[pos_code].index)
+    
+
+    def _process_from_source(self, html) -> pd.DataFrame:
+        """Helper function to process projections from source and return a DataFrame with standardized columns."""
+        # This function would contain the logic to read the raw projections file, standardize column names, merge with player index to get cbsid, and return the processed DataFrame.        
+        soup = bs4(html, 'html.parser')
+        # Find the specific table you want
+        table = soup.find('table', {'class': 'data'})
+        # Use pandas to read the HTML table skipping 4 rows to get to actual table
+        for n in [4,1,2,3]:
+            df = pd.read_html(StringIO(str(table)), header=1, skiprows=n, extract_links='body')[0]
+            if 'Action' in df.columns:
+                break
+        
+        # Remove last row and first 2 columns
+        df = df.iloc[:-1, 2:]
+        # Apply a lambda function to each column to extract the first element of each tuple
+        df = df.apply(lambda col: [v[0] if v[1] is None else v for v in col])
+        # Define the regex pattern
+        pattern = r'^(?P<FullName>[A-Za-z\.\'\-\s]+) (?P<Positions>[A-Z0-9,]+) • (?P<Team>[A-Z]+)$'
+        # Extract the player name and ID
+        df['player'] = df['Player'].apply(lambda x: x[0])
+        df['id'] = df['Player'].apply(lambda x: x[1])
+        # Parse id for cbsid
+        df['cbsid'] = df['id'].apply(lambda x: int(x.split('?')[0].replace('/players/playerpage/', '')))
+        # Use regex to parse out CBSNAME, Pos, and Team
+        df[['CBSNAME', 'Positions', 'Team']] = df['player'].str.extract(pattern)
+        return df
