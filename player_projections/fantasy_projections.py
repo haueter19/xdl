@@ -288,6 +288,7 @@ class FantasyProjections:
         period_qualifiers = self.calculate_qualifiers(
             period_hitting,
             period_pitching,
+            type='period',
             min_pa=1,  # Anyone with a plate appearance
             min_ip=0.1,  # Anyone who pitched
             hitting_percentile=0.0,  # Don't filter by percentile
@@ -976,6 +977,7 @@ class FantasyProjections:
         self,
         hitting: pd.DataFrame,
         pitching: pd.DataFrame,
+        type: Literal['ros', 'period'] = 'ros',
         min_pa: int = 440,
         min_ip: float = 130,
         sp_min_ip: float = 130,
@@ -1049,6 +1051,10 @@ class FantasyProjections:
                     ((pitching['Primary_Pos'] == 'SP') & (pitching['IP'] >= sp_cutoff)) |
                     ((pitching['Primary_Pos'] == 'RP') & (pitching['IP'].between(rp_ip_range[0], rp_ip_range[1])) & (pitching.get('SvHld', 0) > min_sv_hld))
                 ].copy()
+            elif type == 'period':
+                # For period qualifiers, we include anyone with a projection
+                ip_cutoff = 0
+                qual_pitchers = pitching[pitching['IP'] >= ip_cutoff].copy()
             else:
                 ip_cutoff = pitching[pitching['IP'] > 0]['IP'].quantile(pitching_percentile)
                 qual_pitchers = pitching[pitching['IP'] >= ip_cutoff].copy()
