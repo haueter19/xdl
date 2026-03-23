@@ -8,6 +8,7 @@ import math
 import os
 import pandas as pd
 import re
+from plotly import data
 from selenium.webdriver import Chrome
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -429,7 +430,17 @@ class Scraper():
                 for e in elem:
                     if e.text==str(wk):
                         e.click()
-
+            
+            time.sleep(2)
+            html = driver.page_source
+            soup = bs4(html, 'html.parser')
+            data = pd.concat([data, scrape_cbs_owner_weekly_roster(soup, ids, owner_name, wk)])
+            data['year'] = datetime.now().year
+            data['owner_id'] = owner_id
+        
+        data.rename(columns={'CBSID':'cbsid', 'Week':'week', 'Pos':'pos'}, inplace=True)
+        data.to_excel(f'data//{datetime.now().year}-{owner_name}-sit-start.xlsx', engine='openpyxl', index=False)
+        return data
 
     def _process_eligibility(self, val: int, driver: Chrome) -> pd.DataFrame:
         """Helper function to process eligibility for a given owner_id and return a DataFrame."""
