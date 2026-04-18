@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import MetaData, text, Column, Integer, String, ForeignKey, Table, create_engine
@@ -513,12 +513,25 @@ def calc_totals(tdf, opt):
     return opt_totals.to_dict(), bench_totals.to_dict()
 
 
+def _nan_safe(obj):
+    """Recursively replace float nan/inf with None for JSON serialization."""
+    if isinstance(obj, dict):
+        return {k: _nan_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_nan_safe(v) for v in obj]
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    return obj
+
+
 @app.get('/optimize')
 async def optimize(tm: str):
     df = load_roster_data()
     tdf, opt = build_optimized_roster(tm, df)
     opt_totals, bench_totals = calc_totals(tdf, opt)
-    return {tm: {'roster': tdf.to_dict(orient='records'), 'opt_totals': opt_totals, 'bench_totals': bench_totals}}
+    records = tdf.where(tdf.notna(), other=None).to_dict(orient='records')
+    payload = _nan_safe({tm: {'roster': records, 'opt_totals': opt_totals, 'bench_totals': bench_totals}})
+    return JSONResponse(content=payload)
 
 
 @app.get('/trade', response_class=HTMLResponse)
@@ -559,20 +572,21 @@ async def simulate_trade(trade: TradeRequest):
     totals1_after, _ = calc_totals(tdf1_after, opt1_after)
     totals2_after, _ = calc_totals(tdf2_after, opt2_after)
 
-    return {
+    payload = _nan_safe({
         'team1': {
             'name': trade.team1,
             'before': totals1_before,
             'after': totals1_after,
-            'roster': tdf1_after.to_dict(orient='records'),
+            'roster': tdf1_after.where(tdf1_after.notna(), other=None).to_dict(orient='records'),
         },
         'team2': {
             'name': trade.team2,
             'before': totals2_before,
             'after': totals2_after,
-            'roster': tdf2_after.to_dict(orient='records'),
+            'roster': tdf2_after.where(tdf2_after.notna(), other=None).to_dict(orient='records'),
         },
-    }
+    })
+    return JSONResponse(content=payload)
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
