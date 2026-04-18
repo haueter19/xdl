@@ -16,14 +16,16 @@
         .player-row.selected:hover { background-color: rgb(120, 220, 120); }
         .totals-row { font-weight: bold; background-color: #e9ecef; }
         .bench-label { font-weight: bold; color: #6c757d; padding: 6px 0; }
-        .delta-pos { color: green; font-weight: bold; }
-        .delta-neg { color: red; font-weight: bold; }
-        .delta-pos-inverse { color: red; font-weight: bold; }
+        .delta-pos  { color: green; font-weight: bold; }
+        .delta-neg  { color: red;   font-weight: bold; }
+        .delta-pos-inverse { color: red;   font-weight: bold; }
         .delta-neg-inverse { color: green; font-weight: bold; }
         #tradeResults { display: none; }
-        #simulateBtn { display: none; }
+        #simulateBtn  { display: none; }
         .trade-summary { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
         .spinner-border-sm { width: 1rem; height: 1rem; border-width: .15em; }
+        .cat-gain { background-color: #d4edda; }
+        .cat-loss { background-color: #f8d7da; }
     </style>
 </head>
 <body>
@@ -54,14 +56,20 @@
             </div>
         </div>
 
-        <!-- Trade Summary -->
+        <!-- Trade Summary (what each side gives up) -->
         <div class="row m-2">
             <div class="col-6">
                 <div class="trade-summary">
                     <strong id="team1GetsLabel">Team 2 sends:</strong>
                     <table class="table table-sm mb-0" id="team1Gets">
-                        <thead><tr><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th><th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th></tr></thead>
-                        <tbody><tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody>
+                        <thead><tr>
+                            <th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
+                            <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
+                        </tr></thead>
+                        <tbody><tr>
+                            <td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>.000</td>
+                            <td>0</td><td>0</td><td>0</td><td>0.00</td><td>0.00</td>
+                        </tr></tbody>
                     </table>
                 </div>
             </div>
@@ -69,8 +77,14 @@
                 <div class="trade-summary">
                     <strong id="team2GetsLabel">Team 1 sends:</strong>
                     <table class="table table-sm mb-0" id="team2Gets">
-                        <thead><tr><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th><th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th></tr></thead>
-                        <tbody><tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody>
+                        <thead><tr>
+                            <th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
+                            <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
+                        </tr></thead>
+                        <tbody><tr>
+                            <td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>.000</td>
+                            <td>0</td><td>0</td><td>0</td><td>0.00</td><td>0.00</td>
+                        </tr></tbody>
                     </table>
                 </div>
             </div>
@@ -100,40 +114,35 @@
 
         <!-- Trade Results -->
         <div id="tradeResults" class="row m-2">
-            <div class="col-12">
-                <h5>Trade Simulation Results</h5>
-            </div>
+            <div class="col-12"><h5>Trade Impact on Roto Categories</h5></div>
+
             <div class="col-6">
                 <h6 id="results1Label"></h6>
                 <table class="table table-sm table-bordered" id="resultsTable1">
-                    <thead>
-                        <tr>
-                            <th></th><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th>
-                            <th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
-                        </tr>
-                    </thead>
+                    <thead><tr>
+                        <th></th><th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
+                        <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
+                    </tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
             <div class="col-6">
                 <h6 id="results2Label"></h6>
                 <table class="table table-sm table-bordered" id="resultsTable2">
-                    <thead>
-                        <tr>
-                            <th></th><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th>
-                            <th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
-                        </tr>
-                    </thead>
+                    <thead><tr>
+                        <th></th><th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
+                        <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
+                    </tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
 
             <!-- Post-trade rosters -->
-            <div class="col-6">
+            <div class="col-6 mt-2">
                 <h6 id="postRoster1Label"></h6>
                 <div id="postTeam1Roster"></div>
             </div>
-            <div class="col-6">
+            <div class="col-6 mt-2">
                 <h6 id="postRoster2Label"></h6>
                 <div id="postTeam2Roster"></div>
             </div>
@@ -141,13 +150,193 @@
     </div>
 
 <script>
-    var teamData = {};       // cached roster data keyed by team name
+    var teamData     = {};   // cached /optimize results keyed by team name
+    var selected1    = {};   // cbsid → playerData for team1 selections
+    var selected2    = {};   // cbsid → playerData for team2 selections
     var selectedTeam1 = null;
     var selectedTeam2 = null;
-    var selected1 = new Set(); // cbsids selected from team 1
-    var selected2 = new Set(); // cbsids selected from team 2
 
-    // Fetch optimized roster for a team
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    function fmt(v, precision) { return (Number(v) || 0).toFixed(precision); }
+
+    function formatPos(val) {
+        if (!val) return '';
+        if (Array.isArray(val)) return val.join(', ');
+        return String(val).replace(/[\[\]'"]/g, '').trim();
+    }
+
+    // Compute summary stats from a map of {cbsid: playerData}
+    function computeSummary(selectedMap) {
+        var t = { z:0, R:0, HR:0, RBI:0, SB:0, H:0, AB:0,
+                  QS:0, SO:0, SvHld:0, IP:0, Ha:0, BBa:0, ER:0 };
+        Object.values(selectedMap).forEach(function(p) {
+            t.z    += Number(p.z    || 0);
+            t.R    += Number(p.R    || 0);
+            t.HR   += Number(p.HR   || 0);
+            t.RBI  += Number(p.RBI  || 0);
+            t.SB   += Number(p.SB   || 0);
+            t.H    += Number(p.H    || 0);
+            t.AB   += Number(p.AB   || 0);
+            t.QS   += Number(p.QS   || 0);
+            t.SO   += Number(p.SO   || 0);
+            t.SvHld += Number(p['Sv+Hld'] || 0);
+            t.IP   += Number(p.IP   || 0);
+            t.Ha   += Number(p.Ha   || 0);
+            t.BBa  += Number(p.BBa  || 0);
+            t.ER   += Number(p.ER   || 0);
+        });
+        t.BA   = t.AB > 0 ? t.H  / t.AB : 0;
+        t.ERA  = t.IP > 0 ? t.ER / t.IP * 9 : 0;
+        t.WHIP = t.IP > 0 ? (t.Ha + t.BBa) / t.IP : 0;
+        return t;
+    }
+
+    // Render the trade-summary table from a computed totals object
+    function renderSummaryTable(tableId, totals) {
+        var row = `<tr>
+            <td>${fmt(totals.z,1)}</td>
+            <td>${fmt(totals.R,1)}</td>
+            <td>${fmt(totals.HR,1)}</td>
+            <td>${fmt(totals.RBI,1)}</td>
+            <td>${fmt(totals.SB,1)}</td>
+            <td>.${String(Math.round(totals.BA*1000)).padStart(3,'0')}</td>
+            <td>${fmt(totals.QS,1)}</td>
+            <td>${fmt(totals.SO,1)}</td>
+            <td>${fmt(totals.SvHld,1)}</td>
+            <td>${fmt(totals.ERA,2)}</td>
+            <td>${fmt(totals.WHIP,2)}</td>
+        </tr>`;
+        $(`#${tableId} tbody`).html(row);
+    }
+
+    function resetSummaryTable(tableId) {
+        renderSummaryTable(tableId, {z:0,R:0,HR:0,RBI:0,SB:0,BA:0,QS:0,SO:0,SvHld:0,ERA:0,WHIP:0});
+    }
+
+    function updateSimulateBtn() {
+        if (Object.keys(selected1).length > 0 && Object.keys(selected2).length > 0) {
+            $('#simulateBtn').show();
+        } else {
+            $('#simulateBtn').hide();
+        }
+    }
+
+    // ── Roster HTML ────────────────────────────────────────────────────────
+
+    function buildRosterHTML(roster, optTotals, interactive) {
+        if (interactive === undefined) interactive = true;
+        var rowClass = interactive ? 'player-row' : '';
+        var h = '';
+        var hitterHdr = `<table class="table table-condensed table-hover table-sm">
+            <thead><tr><th>Slot</th><th>Elig</th><th>Player</th><th>z</th>
+            <th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th></tr></thead><tbody>`;
+        var pitcherHdr = `<table class="table table-condensed table-hover table-sm">
+            <thead><tr><th>Slot</th><th>Elig</th><th>Player</th><th>z</th>
+            <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th></tr></thead><tbody>`;
+
+        var shStarted = false, spStarted = false, bhStarted = false, bpStarted = false;
+
+        function hitterRow(p) {
+            var ba = Number(p.AB) > 0 ? (Number(p.H) / Number(p.AB)).toFixed(3) : fmt(p.BA, 3);
+            return `<tr class="${rowClass}" data-cbsid="${p.cbsid}">
+                <td>${p.optimized_position||''}</td>
+                <td style="white-space:nowrap">${formatPos(p.all_pos)}</td>
+                <td>${p.Player}</td>
+                <td>${fmt(p.z,1)}</td>
+                <td>${fmt(p.R,0)}</td><td>${fmt(p.HR,0)}</td>
+                <td>${fmt(p.RBI,0)}</td><td>${fmt(p.SB,0)}</td>
+                <td>${ba}</td></tr>`;
+        }
+        function pitcherRow(p) {
+            return `<tr class="${rowClass}" data-cbsid="${p.cbsid}">
+                <td>${p.optimized_position||''}</td>
+                <td style="white-space:nowrap">${formatPos(p.all_pos)}</td>
+                <td>${p.Player}</td>
+                <td>${fmt(p.z,1)}</td>
+                <td>${fmt(p.QS,0)}</td><td>${fmt(p.SO,0)}</td>
+                <td>${fmt(p['Sv+Hld'],0)}</td>
+                <td>${fmt(p.ERA,2)}</td><td>${fmt(p.WHIP,2)}</td></tr>`;
+        }
+        function hitterTotals(label, t) {
+            var ba = Number(t.AB) > 0 ? (Number(t.H)/Number(t.AB)).toFixed(3) : fmt(t.BA,3);
+            return `<tr class="totals-row"><td colspan="3">${label}</td>
+                <td>${fmt(t.hitter_z||t.z,1)}</td>
+                <td>${fmt(t.R,0)}</td><td>${fmt(t.HR,0)}</td>
+                <td>${fmt(t.RBI,0)}</td><td>${fmt(t.SB,0)}</td>
+                <td>${ba}</td></tr>`;
+        }
+        function pitcherTotals(label, t) {
+            return `<tr class="totals-row"><td colspan="3">${label}</td>
+                <td>${fmt(t.pitcher_z||t.z,1)}</td>
+                <td>${fmt(t.QS,0)}</td><td>${fmt(t.SO,0)}</td>
+                <td>${fmt(t['Sv+Hld'],0)}</td>
+                <td>${fmt(t.ERA,2)}</td><td>${fmt(t.WHIP,2)}</td></tr>`;
+        }
+
+        roster.forEach(function(p) {
+            if (p.opt_designation === 'starting_hitter') {
+                if (!shStarted) { h += '<div class="bench-label">Starting Hitters</div>' + hitterHdr; shStarted = true; }
+                h += hitterRow(p);
+            }
+            if (p.opt_designation === 'starting_pitcher') {
+                if (!spStarted) {
+                    h += hitterTotals('Hitter Totals', optTotals) + '</tbody></table>';
+                    h += '<div class="bench-label">Starting Pitchers</div>' + pitcherHdr;
+                    spStarted = true;
+                }
+                h += pitcherRow(p);
+            }
+            if (p.opt_designation === 'bench_hitter') {
+                if (!bhStarted) {
+                    // Close starting pitchers section with totals, then open bench hitters
+                    h += pitcherTotals('Pitcher Totals', optTotals) + '</tbody></table>';
+                    h += '<div class="bench-label">Bench Hitters</div>' + hitterHdr;
+                    bhStarted = true;
+                }
+                h += hitterRow(p);
+            }
+            if (p.opt_designation === 'bench_pitcher') {
+                if (!bpStarted) {
+                    h += '</tbody></table>';
+                    h += '<div class="bench-label">Bench Pitchers</div>' + pitcherHdr;
+                    bpStarted = true;
+                }
+                h += pitcherRow(p);
+            }
+        });
+        h += '</tbody></table>';
+        return h;
+    }
+
+    // ── Before/After results table ─────────────────────────────────────────
+
+    function renderResultsTable(tableId, before, after) {
+        var stats = ['z','R','HR','RBI','SB','BA','QS','SO','Sv+Hld','ERA','WHIP'];
+        var inverse = ['ERA','WHIP'];
+        var precision = { z:1, R:0, HR:0, RBI:0, SB:0, BA:3, QS:0, SO:0, 'Sv+Hld':0, ERA:2, WHIP:2 };
+        function v(obj, s) { return Number(obj[s] || obj['Sv+Hld'] || 0); }
+        var bRow = '<tr><td><strong>Before</strong></td>';
+        var aRow = '<tr><td><strong>After</strong></td>';
+        var dRow = '<tr><td><strong>Delta</strong></td>';
+        stats.forEach(function(s) {
+            var b = v(before, s), a = v(after, s), d = a - b;
+            var pr = precision[s] !== undefined ? precision[s] : 1;
+            var cls = '';
+            if (Math.abs(d) > 0.001) {
+                var isPos = d > 0;
+                var isInv = inverse.includes(s);
+                cls = (isPos !== isInv) ? 'delta-pos' : 'delta-neg';
+            }
+            bRow += `<td>${b.toFixed(pr)}</td>`;
+            aRow += `<td>${a.toFixed(pr)}</td>`;
+            dRow += `<td class="${cls}">${d >= 0 ? '+' : ''}${d.toFixed(pr)}</td>`;
+        });
+        $(`#${tableId} tbody`).html(bRow+'</tr>'+aRow+'</tr>'+dRow+'</tr>');
+    }
+
+    // ── Fetch team roster ──────────────────────────────────────────────────
+
     async function fetchTeamData(tm) {
         if (teamData[tm]) return teamData[tm];
         const resp = await fetch(`/optimize?tm=${encodeURIComponent(tm)}`);
@@ -157,244 +346,117 @@
         return data[tm];
     }
 
-    // Build roster HTML from roster data. interactive=true enables click-to-select.
-    function buildRosterHTML(roster, optTotals, interactive) {
-        if (interactive === undefined) interactive = true;
-        var rowClass = interactive ? 'player-row' : '';
-        var h = '';
-        var hitterHeaders = `<table class="table table-condensed table-hover table-sm">
-            <thead><tr><th>Pos</th><th>Elig</th><th>Player</th><th>z</th><th>HR</th><th>SB</th><th>R</th><th>RBI</th><th>BA</th></tr></thead><tbody>`;
-        var pitcherHeaders = `<table class="table table-condensed table-hover table-sm">
-            <thead><tr><th>Pos</th><th>Elig</th><th>Player</th><th>z</th><th>W</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th></tr></thead><tbody>`;
-        var benchHitterStarted = false;
-        var benchPitcherStarted = false;
-        var startingHittersStarted = false;
-        var startingPitchersStarted = false;
-
-        roster.forEach(function(p) {
-            if (p.opt_designation === 'starting_hitter') {
-                if (!startingHittersStarted) {
-                    h += '<div class="bench-label">Starting Hitters</div>' + hitterHeaders;
-                    startingHittersStarted = true;
-                }
-                h += `<tr class="${rowClass}" data-cbsid="${p.cbsid}">
-                    <td>${p.optimized_position}</td><td>${p.Pos}</td><td>${p.Player}</td>
-                    <td>${p.z}</td><td>${p.HR}</td><td>${p.SB}</td><td>${p.R}</td><td>${p.RBI}</td><td>${p.BA}</td></tr>`;
-            }
-            if (p.opt_designation === 'starting_pitcher') {
-                if (!startingPitchersStarted) {
-                    h += `<tr class="totals-row"><td colspan="3">Hitter Totals</td>
-                        <td>${optTotals.hitter_z}</td><td>${optTotals.HR}</td><td>${optTotals.SB}</td>
-                        <td>${optTotals.R}</td><td>${optTotals.RBI}</td><td>${optTotals.BA}</td></tr>`;
-                    h += '</tbody></table>';
-                    h += '<div class="bench-label">Starting Pitchers</div>' + pitcherHeaders;
-                    startingPitchersStarted = true;
-                }
-                h += `<tr class="${rowClass}" data-cbsid="${p.cbsid}">
-                    <td>${p.optimized_position}</td><td>${p.Pos}</td><td>${p.Player}</td>
-                    <td>${p.z}</td><td>${p.W}</td><td>${p.SO}</td><td>${p['Sv+Hld'] || 0}</td><td>${p.ERA}</td><td>${p.WHIP}</td></tr>`;
-            }
-            if (p.opt_designation === 'bench_hitter') {
-                if (!benchHitterStarted) {
-                    h += `<tr class="totals-row"><td colspan="3">Pitcher Totals</td>
-                        <td>${optTotals.pitcher_z}</td><td>${optTotals.W}</td><td>${optTotals.SO}</td>
-                        <td>${optTotals['Sv+Hld'] || 0}</td><td>${optTotals.ERA}</td><td>${optTotals.WHIP}</td></tr>`;
-                    h += '</tbody></table>';
-                    h += '<div class="bench-label">Bench Hitters</div>' + hitterHeaders;
-                    benchHitterStarted = true;
-                }
-                h += `<tr class="${rowClass}" data-cbsid="${p.cbsid}">
-                    <td>${p.optimized_position}</td><td>${p.Pos}</td><td>${p.Player}</td>
-                    <td>${p.z}</td><td>${p.HR}</td><td>${p.SB}</td><td>${p.R}</td><td>${p.RBI}</td><td>${p.BA}</td></tr>`;
-            }
-            if (p.opt_designation === 'bench_pitcher') {
-                if (!benchPitcherStarted) {
-                    h += '</tbody></table>';
-                    h += '<div class="bench-label">Bench Pitchers</div>' + pitcherHeaders;
-                    benchPitcherStarted = true;
-                }
-                h += `<tr class="${rowClass}" data-cbsid="${p.cbsid}">
-                    <td>${p.optimized_position}</td><td>${p.Pos}</td><td>${p.Player}</td>
-                    <td>${p.z}</td><td>${p.W}</td><td>${p.SO}</td><td>${p['Sv+Hld'] || 0}</td><td>${p.ERA}</td><td>${p.WHIP}</td></tr>`;
-            }
-        });
-        h += '</tbody></table>';
-        return h;
-    }
-
-    // Update the trade summary table when a player is selected/deselected
-    function updateSummaryTable(tableId, operation, playerData) {
-        var tbl = $(`#${tableId} tbody tr`);
-        var headers = $(`#${tableId} thead th`);
-        var mult = operation === 'add' ? 1 : -1;
-        tbl.find('td').each(function(index) {
-            var stat = headers.eq(index).text();
-            var mapped = stat;
-            if (playerData[mapped] !== undefined) {
-                var cur = Number($(this).text()) || 0;
-                $(this).text((cur + mult * playerData[mapped]).toFixed(1));
-            }
-        });
-    }
-
-    // Show/hide simulate button based on selections
-    function updateSimulateBtn() {
-        if (selected1.size > 0 && selected2.size > 0) {
-            $('#simulateBtn').show();
-        } else {
-            $('#simulateBtn').hide();
-        }
-    }
-
-    // Render before/after results table
-    function renderResultsTable(tableId, before, after) {
-        var stats = ['z', 'HR', 'SB', 'R', 'RBI', 'BA', 'W', 'SO', 'Sv+Hld', 'ERA', 'WHIP'];
-        // ERA and WHIP are inverse (lower is better)
-        var inverseStats = ['ERA', 'WHIP'];
-        var beforeRow = '<tr><td>Before</td>';
-        var afterRow = '<tr><td>After</td>';
-        var deltaRow = '<tr><td>Delta</td>';
-        stats.forEach(function(s) {
-            var b = before[s] || 0;
-            var a = after[s] || 0;
-            var d = a - b;
-            var isInverse = inverseStats.includes(s);
-            var cls = '';
-            if (d > 0.001) cls = isInverse ? 'delta-pos-inverse' : 'delta-pos';
-            else if (d < -0.001) cls = isInverse ? 'delta-neg-inverse' : 'delta-neg';
-            var precision = ['BA', 'ERA', 'WHIP'].includes(s) ? 3 : 1;
-            beforeRow += `<td>${b.toFixed(precision)}</td>`;
-            afterRow += `<td>${a.toFixed(precision)}</td>`;
-            deltaRow += `<td class="${cls}">${d >= 0 ? '+' : ''}${d.toFixed(precision)}</td>`;
-        });
-        beforeRow += '</tr>'; afterRow += '</tr>'; deltaRow += '</tr>';
-        $(`#${tableId} tbody`).html(beforeRow + afterRow + deltaRow);
-    }
+    // ── Wire up ────────────────────────────────────────────────────────────
 
     $(document).ready(function() {
-        // Load team on select
+
         async function loadTeam(side, teamName) {
-            var loadingId = side === 1 ? '#team1Loading' : '#team2Loading';
-            var rosterId = side === 1 ? '#team1Roster' : '#team2Roster';
-            $(loadingId).show();
+            var loadId  = '#team' + side + 'Loading';
+            var rostId  = '#team' + side + 'Roster';
+            $(loadId).show();
             try {
                 var data = await fetchTeamData(teamName);
-                $(loadingId).hide();
-                var html = buildRosterHTML(data.roster, data.opt_totals);
-                $(rosterId).html(html);
-            } catch (err) {
-                $(loadingId).hide();
-                $(rosterId).html('<div class="text-danger">Error loading roster</div>');
+                $(loadId).hide();
+                $(rostId).html(buildRosterHTML(data.roster, data.opt_totals));
+            } catch(e) {
+                $(loadId).hide();
+                $(rostId).html('<div class="text-danger">Error loading roster</div>');
             }
         }
 
-        $('#team1Select').change(function() {
-            selectedTeam1 = $(this).val();
-            selected1.clear();
-            resetSummary('team1Gets');
+        function onTeamChange(side, teamName) {
+            if (side === 1) { selected1 = {}; selectedTeam1 = teamName; }
+            else            { selected2 = {}; selectedTeam2 = teamName; }
+            resetSummaryTable(side === 1 ? 'team2Gets' : 'team1Gets');
             updateSimulateBtn();
             $('#tradeResults').hide();
-            $('#team1GetsLabel').text(selectedTeam1 + ' gets:');
-            $('#team2GetsLabel').text((selectedTeam2 || 'Team 2') + ' sends to ' + selectedTeam1 + ':');
-            // Invalidate cache so re-optimization runs fresh
-            delete teamData[selectedTeam1];
-            loadTeam(1, selectedTeam1);
-        });
+            $('#resetBtn').hide();
+            // Update labels
+            var t1 = selectedTeam1 || 'Team 1', t2 = selectedTeam2 || 'Team 2';
+            $('#team1GetsLabel').text(t2 + ' sends to ' + t1 + ':');
+            $('#team2GetsLabel').text(t1 + ' sends to ' + t2 + ':');
+            delete teamData[teamName];
+            loadTeam(side, teamName);
+        }
 
-        $('#team2Select').change(function() {
-            selectedTeam2 = $(this).val();
-            selected2.clear();
-            resetSummary('team2Gets');
-            updateSimulateBtn();
-            $('#tradeResults').hide();
-            $('#team2GetsLabel').text(selectedTeam2 + ' gets:');
-            $('#team1GetsLabel').text((selectedTeam1 || 'Team 1') + ' sends to ' + selectedTeam2 + ':');
-            delete teamData[selectedTeam2];
-            loadTeam(2, selectedTeam2);
-        });
+        $('#team1Select').change(function() { onTeamChange(1, $(this).val()); });
+        $('#team2Select').change(function() { onTeamChange(2, $(this).val()); });
 
-        // Click to select/deselect players
+        // Click to select/deselect
         $(document).on('click', '.player-row', function() {
-            var cbsid = Number($(this).data('cbsid'));
+            var cbsid    = $(this).data('cbsid');
             var rosterId = $(this).closest('[id$="Roster"]').attr('id');
-            var side = rosterId.includes('team1') ? 1 : 2;
-            var selectedSet = side === 1 ? selected1 : selected2;
+            var side     = rosterId && rosterId.includes('team1') ? 1 : 2;
+            var selMap   = side === 1 ? selected1 : selected2;
             var teamName = side === 1 ? selectedTeam1 : selectedTeam2;
-            var summaryTable = side === 1 ? 'team2Gets' : 'team1Gets';
+            var summaryTbl = side === 1 ? 'team2Gets' : 'team1Gets';
+            var oppSelMap  = side === 1 ? selected2   : selected1;
 
-            var playerData = teamData[teamName].roster.find(p => p.cbsid === cbsid);
+            if (!teamName || !teamData[teamName]) return;
+            var playerData = teamData[teamName].roster.find(function(p) { return p.cbsid == cbsid; });
             if (!playerData) return;
 
             if ($(this).hasClass('selected')) {
                 $(this).removeClass('selected');
-                selectedSet.delete(cbsid);
-                updateSummaryTable(summaryTable, 'subtract', playerData);
+                delete selMap[cbsid];
             } else {
                 $(this).addClass('selected');
-                selectedSet.add(cbsid);
-                updateSummaryTable(summaryTable, 'add', playerData);
+                selMap[cbsid] = playerData;
             }
+
+            renderSummaryTable(summaryTbl, computeSummary(selMap));
             updateSimulateBtn();
         });
 
         // Simulate trade
         $('#simulateBtn').click(async function() {
-            if (!selectedTeam1 || !selectedTeam2 || selected1.size === 0 || selected2.size === 0) return;
+            if (!selectedTeam1 || !selectedTeam2) return;
+            var t1p = Object.keys(selected1).map(Number);
+            var t2p = Object.keys(selected2).map(Number);
+            if (t1p.length === 0 || t2p.length === 0) return;
 
-            $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Simulating...');
+            $(this).prop('disabled', true)
+                   .html('<span class="spinner-border spinner-border-sm"></span> Simulating...');
             try {
                 var resp = await fetch('/simulate_trade', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        team1: selectedTeam1,
-                        team2: selectedTeam2,
-                        team1_players: Array.from(selected1),
-                        team2_players: Array.from(selected2)
+                        team1: selectedTeam1, team2: selectedTeam2,
+                        team1_players: t1p, team2_players: t2p
                     })
                 });
                 var result = await resp.json();
 
-                // Show results
                 $('#results1Label').text(selectedTeam1);
                 $('#results2Label').text(selectedTeam2);
                 renderResultsTable('resultsTable1', result.team1.before, result.team1.after);
                 renderResultsTable('resultsTable2', result.team2.before, result.team2.after);
 
-                // Build post-trade rosters
-                $('#postRoster1Label').text(selectedTeam1 + ' - Post-Trade Optimized Roster');
-                $('#postRoster2Label').text(selectedTeam2 + ' - Post-Trade Optimized Roster');
-
-                // Calculate post-trade opt_totals from the after data for display
-                var postTotals1 = result.team1.after;
-                var postTotals2 = result.team2.after;
-                $('#postTeam1Roster').html(buildRosterHTML(result.team1.roster, postTotals1, false));
-                $('#postTeam2Roster').html(buildRosterHTML(result.team2.roster, postTotals2, false));
+                $('#postRoster1Label').text(selectedTeam1 + ' — Post-Trade Optimized Roster');
+                $('#postRoster2Label').text(selectedTeam2 + ' — Post-Trade Optimized Roster');
+                $('#postTeam1Roster').html(buildRosterHTML(result.team1.roster, result.team1.after, false));
+                $('#postTeam2Roster').html(buildRosterHTML(result.team2.roster, result.team2.after, false));
 
                 $('#tradeResults').show();
                 $('#resetBtn').show();
-            } catch (err) {
-                alert('Error simulating trade: ' + err.message);
+            } catch(e) {
+                alert('Error simulating trade: ' + e.message);
             }
             $(this).prop('disabled', false).text('Simulate Trade');
         });
 
         // Reset
         $('#resetBtn').click(function() {
-            selected1.clear();
-            selected2.clear();
+            selected1 = {}; selected2 = {};
             $('.player-row').removeClass('selected');
-            resetSummary('team1Gets');
-            resetSummary('team2Gets');
+            resetSummaryTable('team1Gets');
+            resetSummaryTable('team2Gets');
             $('#tradeResults').hide();
             $('#resetBtn').hide();
             updateSimulateBtn();
         });
     });
-
-    function resetSummary(tableId) {
-        $(`#${tableId} tbody td`).text('0');
-    }
 </script>
 </body>
 </html>

@@ -385,19 +385,95 @@ STAT_COLS = ['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'QS', 'SO', 'Sv+Hld', 
 
 
 def load_roster_data():
-    yr = datetime.now().year-1
-    wk = pd.read_sql(f"SELECT max(week) week FROM projections WHERE year={yr}", engine).iloc[0]['week'] - 1
-    df = pd.read_sql(f"SELECT distinct p.CBSNAME Player, o.owner Owner, r.pos Decision, j.*, e.*, \
-                    CASE WHEN e.DH>=5 THEN 'h' ELSE 'p' END As type \
-                    FROM roster r \
-                    INNER JOIN projections j On (j.cbsid=r.cbsid) \
-                    INNER JOIN players p On (r.cbsid=p.cbsid) \
-                    INNER JOIN owners o On (r.owner_id=o.owner_id) \
-                    INNER JOIN (SELECT cbsid, all_pos, posC C, pos1B '1B', pos2B '2B', pos3B '3B', posSS SS, posOF OF, posDH DH, posSP SP, posRP RP, posP P FROM eligibility WHERE year=2024 and week={wk}) e On (r.cbsid=e.cbsid) \
-            WHERE j.year={yr} AND j.week={wk} AND j.proj_type='ros' AND r.year={yr} AND r.week={wk} \
-            ORDER BY Owner, year, week", engine)
-    df['z'] = round(df['z'], 1)
-    df.fillna(0, inplace=True)
+    """
+    Load player + ROS projection + eligibility data from players{year}.
+
+    Uses the current year's players table when it has owned players (draft
+    complete), otherwise falls back to year-1. Joins with the latest
+    available eligibility week for position data.
+    """
+    yr = datetime.now().year
+    with engine.connect() as conn:
+        try:
+            owned_count = conn.execute(
+                text(f"SELECT COUNT(*) FROM players{yr} WHERE Owner IS NOT NULL AND Owner != '' AND Owner != 'None'")
+            ).scalar()
+        except Exception:
+            owned_count = 0
+    if owned_count < 10:
+        yr -= 1
+
+    # Latest eligibility week for this year; fall back to prior year
+    elig_yr = yr
+    elig = pd.read_sql(f"""
+        SELECT cbsid, all_pos,
+               posC C, pos1B '1B', pos2B '2B', pos3B '3B',
+               posSS SS, posMI MI, posCI CI, posOF OF, posDH DH,
+               posSP SP, posRP RP, posP P
+        FROM eligibility
+        WHERE year={elig_yr} AND week=(SELECT MAX(week) FROM eligibility WHERE year={elig_yr})
+    """, engine)
+    if elig.empty:
+        elig_yr = yr - 1
+        elig = pd.read_sql(f"""
+            SELECT cbsid, all_pos,
+                   posC C, pos1B '1B', pos2B '2B', pos3B '3B',
+                   posSS SS, posMI MI, posCI CI, posOF OF, posDH DH,
+                   posSP SP, posRP RP, posP P
+            FROM eligibility
+            WHERE year={elig_yr} AND week=(SELECT MAX(week) FROM eligibility WHERE year={elig_yr})
+        """, engine)
+
+    df = pd.read_sql(f"SELECT * FROM players{yr}", engine)
+    df['cbsid'] = pd.to_numeric(df['cbsid'], errors='coerce')
+    df = df[df['cbsid'].notna()].copy()
+    df['cbsid'] = df['cbsid'].astype(int)
+
+    df = df.merge(elig, on='cbsid', how='left')
+
+    # Normalize column names to what build_optimized_roster / calc_totals expect
+    renames = {}
+    if 'Name' in df.columns and 'Player' not in df.columns:
+        renames['Name'] = 'Player'
+    if 'SvHld' in df.columns and 'Sv+Hld' not in df.columns:
+        renames['SvHld'] = 'Sv+Hld'
+    if 'HA' in df.columns and 'Ha' not in df.columns:
+        renames['HA'] = 'Ha'
+    if renames:
+        df.rename(columns=renames, inplace=True)
+
+    # Sv+Hld fallback from SV + HLD
+    if 'Sv+Hld' not in df.columns:
+        df['Sv+Hld'] = df.get('SV', pd.Series(0, index=df.index)).fillna(0) + \
+                       df.get('HLD', pd.Series(0, index=df.index)).fillna(0)
+
+    # Pitcher BB allowed (BBa) — needed for WHIP component calc in calc_totals
+    # Derive: BBa = WHIP * IP - Ha  (since WHIP = (BB+H)/IP)
+    if 'BBa' not in df.columns:
+        ip  = pd.to_numeric(df.get('IP',  0), errors='coerce').fillna(0)
+        whp = pd.to_numeric(df.get('WHIP', 0), errors='coerce').fillna(0)
+        ha  = pd.to_numeric(df.get('Ha',  0), errors='coerce').fillna(0)
+        df['BBa'] = (whp * ip - ha).clip(lower=0)
+
+    # Hitter/pitcher designation from Primary_Pos
+    df['type'] = df['Primary_Pos'].apply(
+        lambda p: 'h' if str(p) in {'C', '1B', '2B', '3B', 'OF', 'DH', 'SS'} else 'p'
+    )
+
+    # W (projected wins) absent in some year tables — default to 0
+    if 'W' not in df.columns:
+        df['W'] = 0
+
+    # Numeric fill and rounding
+    for col in ['z', 'HR', 'SB', 'R', 'RBI', 'H', 'AB', 'W', 'QS', 'SO',
+                'Sv+Hld', 'IP', 'Ha', 'BBa', 'ER']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    df['z']    = df['z'].round(1)    if 'z'    in df.columns else df['z']
+    df['BA']   = pd.to_numeric(df.get('BA',   0), errors='coerce').fillna(0).round(3)
+    df['ERA']  = pd.to_numeric(df.get('ERA',  0), errors='coerce').fillna(0).round(2)
+    df['WHIP'] = pd.to_numeric(df.get('WHIP', 0), errors='coerce').fillna(0).round(2)
+
     return df
 
 
@@ -443,7 +519,10 @@ async def optimize(tm: str):
 @app.get('/trade', response_class=HTMLResponse)
 async def trade_analyzer(request: Request):
     df = load_roster_data()
-    teams = df.Owner.sort_values().unique().tolist()
+    teams = sorted(
+        df.loc[df['Owner'].notna() & (df['Owner'] != '') & (df['Owner'] != 'None'), 'Owner']
+        .unique().tolist()
+    )
     return templates.TemplateResponse('trade.html', {'request': request, 'teams': teams})
 
 
