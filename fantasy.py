@@ -392,14 +392,18 @@ def load_roster_data():
     complete), otherwise falls back to year-1. Joins with the latest
     available eligibility week for position data.
     """
+    import sqlite3 as _sqlite3
+    _db = str(engine.url).replace('sqlite:///', '')
+    _conn = _sqlite3.connect(_db)
+
     yr = datetime.now().year
-    with engine.connect() as conn:
-        try:
-            owned_count = conn.execute(
-                text(f"SELECT COUNT(*) FROM players{yr} WHERE Owner IS NOT NULL AND Owner != '' AND Owner != 'None'")
-            ).scalar()
-        except Exception:
-            owned_count = 0
+    try:
+        owned_count = pd.read_sql(
+            f"SELECT COUNT(*) n FROM players{yr} WHERE Owner IS NOT NULL AND Owner != '' AND Owner != 'None'",
+            _conn
+        ).iloc[0]['n']
+    except Exception:
+        owned_count = 0
     if owned_count < 10:
         yr -= 1
 
@@ -412,7 +416,7 @@ def load_roster_data():
                posSP SP, posRP RP, posP P
         FROM eligibility
         WHERE year={elig_yr} AND week=(SELECT MAX(week) FROM eligibility WHERE year={elig_yr})
-    """, engine)
+    """, _conn)
     if elig.empty:
         elig_yr = yr - 1
         elig = pd.read_sql(f"""
@@ -422,9 +426,10 @@ def load_roster_data():
                    posSP SP, posRP RP, posP P
             FROM eligibility
             WHERE year={elig_yr} AND week=(SELECT MAX(week) FROM eligibility WHERE year={elig_yr})
-        """, engine)
+        """, _conn)
 
-    df = pd.read_sql(f"SELECT * FROM players{yr}", engine)
+    df = pd.read_sql(f"SELECT * FROM players{yr}", _conn)
+    _conn.close()
     df['cbsid'] = pd.to_numeric(df['cbsid'], errors='coerce')
     df = df[df['cbsid'].notna()].copy()
     df['cbsid'] = df['cbsid'].astype(int)
