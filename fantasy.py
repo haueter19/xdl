@@ -498,14 +498,19 @@ def build_optimized_roster(tm, df, opt=None):
 
 def calc_totals(tdf, opt):
     starters = opt['hitter_lineup'] + opt['pitcher_lineup']
-    opt_totals = tdf[tdf['Player'].isin(starters)][STAT_COLS].sum()
+    starters_df = tdf[tdf['Player'].isin(starters)]
+    pitchers_df  = starters_df[starters_df['type'] == 'p']
+    opt_totals = starters_df[STAT_COLS].sum()
+    opt_totals['SO'] = pitchers_df['SO'].sum()   # pitcher SO only
     opt_totals['z'] = round(opt_totals['z'], 1)
     opt_totals['hitter_z'] = round(tdf[tdf['Player'].isin(opt['hitter_lineup'])]['z'].sum(), 1)
     opt_totals['pitcher_z'] = round(tdf[tdf['Player'].isin(opt['pitcher_lineup'])]['z'].sum(), 1)
     opt_totals['BA'] = round(opt_totals['H'] / opt_totals['AB'], 3) if opt_totals['AB'] > 0 else 0
     opt_totals['ERA'] = round(opt_totals['ER'] / opt_totals['IP'] * 9, 2) if opt_totals['IP'] > 0 else 0
     opt_totals['WHIP'] = round((opt_totals['BBa'] + opt_totals['Ha']) / opt_totals['IP'], 2) if opt_totals['IP'] > 0 else 0
-    bench_totals = tdf[~tdf['Player'].isin(starters)][STAT_COLS].sum()
+    bench_df = tdf[~tdf['Player'].isin(starters)]
+    bench_totals = bench_df[STAT_COLS].sum()
+    bench_totals['SO'] = bench_df[bench_df['type'] == 'p']['SO'].sum()
     bench_totals['z'] = round(bench_totals['z'], 1)
     bench_totals['BA'] = round(bench_totals['H'] / bench_totals['AB'], 3) if bench_totals['AB'] > 0 else 0
     bench_totals['ERA'] = round(bench_totals['ER'] / bench_totals['IP'] * 9, 2) if bench_totals['IP'] > 0 else 0

@@ -178,7 +178,7 @@
             t.H    += Number(p.H    || 0);
             t.AB   += Number(p.AB   || 0);
             t.QS   += Number(p.QS   || 0);
-            t.SO   += Number(p.SO   || 0);
+            if (p.type === 'p') t.SO += Number(p.SO || 0);  // pitcher SO only
             t.SvHld += Number(p['Sv+Hld'] || 0);
             t.IP   += Number(p.IP   || 0);
             t.Ha   += Number(p.Ha   || 0);
