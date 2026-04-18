@@ -102,49 +102,48 @@
             </div>
         </div>
 
-        <!-- Rosters -->
-        <div class="row m-2">
+        <!-- Trade Impact (shown after simulate) -->
+        <div id="tradeResults" class="row m-2">
+            <div class="col-12"><h6 class="mb-1">Trade Impact on Roto Categories</h6></div>
             <div class="col-6">
-                <div id="team1Roster"></div>
+                <h6 id="results1Label" class="mb-0 text-muted" style="font-size:0.8rem"></h6>
+                <table class="table table-sm table-bordered mb-1" id="resultsTable1">
+                    <thead><tr>
+                        <th></th><th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
+                        <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
             </div>
             <div class="col-6">
-                <div id="team2Roster"></div>
+                <h6 id="results2Label" class="mb-0 text-muted" style="font-size:0.8rem"></h6>
+                <table class="table table-sm table-bordered mb-1" id="resultsTable2">
+                    <thead><tr>
+                        <th></th><th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
+                        <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Trade Results -->
-        <div id="tradeResults" class="row m-2">
-            <div class="col-12"><h5>Trade Impact on Roto Categories</h5></div>
-
+        <!-- Rosters (before + after, side by side) -->
+        <div class="row m-2">
             <div class="col-6">
-                <h6 id="results1Label"></h6>
-                <table class="table table-sm table-bordered" id="resultsTable1">
-                    <thead><tr>
-                        <th></th><th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
-                        <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
-                    </tr></thead>
-                    <tbody></tbody>
-                </table>
+                <div id="team1RosterLabel" class="bench-label" style="display:none">Current Roster</div>
+                <div id="team1Roster"></div>
+                <div id="postTeam1RosterWrap" style="display:none">
+                    <div class="bench-label mt-2" id="postRoster1Label"></div>
+                    <div id="postTeam1Roster"></div>
+                </div>
             </div>
             <div class="col-6">
-                <h6 id="results2Label"></h6>
-                <table class="table table-sm table-bordered" id="resultsTable2">
-                    <thead><tr>
-                        <th></th><th>z</th><th>R</th><th>HR</th><th>RBI</th><th>SB</th><th>BA</th>
-                        <th>QS</th><th>SO</th><th>Sv+Hld</th><th>ERA</th><th>WHIP</th>
-                    </tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
-            <!-- Post-trade rosters -->
-            <div class="col-6 mt-2">
-                <h6 id="postRoster1Label"></h6>
-                <div id="postTeam1Roster"></div>
-            </div>
-            <div class="col-6 mt-2">
-                <h6 id="postRoster2Label"></h6>
-                <div id="postTeam2Roster"></div>
+                <div id="team2RosterLabel" class="bench-label" style="display:none">Current Roster</div>
+                <div id="team2Roster"></div>
+                <div id="postTeam2RosterWrap" style="display:none">
+                    <div class="bench-label mt-2" id="postRoster2Label"></div>
+                    <div id="postTeam2Roster"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -433,10 +432,14 @@
                 renderResultsTable('resultsTable1', result.team1.before, result.team1.after);
                 renderResultsTable('resultsTable2', result.team2.before, result.team2.after);
 
-                $('#postRoster1Label').text(selectedTeam1 + ' — Post-Trade Optimized Roster');
-                $('#postRoster2Label').text(selectedTeam2 + ' — Post-Trade Optimized Roster');
+                $('#postRoster1Label').text(selectedTeam1 + ' — Post-Trade Roster');
+                $('#postRoster2Label').text(selectedTeam2 + ' — Post-Trade Roster');
                 $('#postTeam1Roster').html(buildRosterHTML(result.team1.roster, result.team1.after, false));
                 $('#postTeam2Roster').html(buildRosterHTML(result.team2.roster, result.team2.after, false));
+                $('#team1RosterLabel').show();
+                $('#team2RosterLabel').show();
+                $('#postTeam1RosterWrap').show();
+                $('#postTeam2RosterWrap').show();
 
                 $('#tradeResults').show();
                 $('#resetBtn').show();
@@ -454,6 +457,10 @@
             resetSummaryTable('team2Gets');
             $('#tradeResults').hide();
             $('#resetBtn').hide();
+            $('#team1RosterLabel').hide();
+            $('#team2RosterLabel').hide();
+            $('#postTeam1RosterWrap').hide();
+            $('#postTeam2RosterWrap').hide();
             updateSimulateBtn();
         });
     });
