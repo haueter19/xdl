@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
 
-N_WEEKS = 26
+N_WEEKS = 27
 ROTO_CATS_H = ['R', 'HR', 'RBI', 'SB', 'BA']
 ROTO_CATS_P = ['QS', 'SO', 'SvHld', 'ERA', 'WHIP']
 ROTO_CATS_LOWER_IS_BETTER = {'ERA', 'WHIP'}

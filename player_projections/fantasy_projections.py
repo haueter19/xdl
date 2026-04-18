@@ -288,6 +288,7 @@ class FantasyProjections:
         period_qualifiers = self.calculate_qualifiers(
             period_hitting,
             period_pitching,
+            type='period',
             min_pa=1,  # Anyone with a plate appearance
             min_ip=0.1,  # Anyone who pitched
             hitting_percentile=0.0,  # Don't filter by percentile
@@ -949,12 +950,13 @@ class FantasyProjections:
                 statcast = pd.read_csv(statcast_path, encoding='latin-1')
                 statcast = self.standardize_columns(statcast, player_type)
                 statcast['IDFANGRAPHS'] = statcast['playerid'].astype(str)
+                statcast.rename(columns={'GS':'GS_sc'},inplace=True)
                 statcast = statcast.merge(self.player_index[['cbsid', 'IDFANGRAPHS']], on='IDFANGRAPHS', how='inner')
 
                 if player_type == 'hitting':
                     statcast = statcast[['cbsid', 'IDFANGRAPHS', 'Age_ly', 'Barrel%', 'EV', 'maxEV', 'ISO_ly', 'Hard%+', 'xBA', 'xwOBA', 'wOBA_ly', 'wRC+_ly', 'O-Swing%', 'Contact%', 'BABIP_ly', 'PA_sc', 'sprint_speed', 'CSW%']]
                 else:
-                    statcast = statcast[['cbsid', 'IDFANGRAPHS', 'Age_ly', 'TBF', 'K%', 'BB%', 'K-BB%_ly', 'FBv', 'Stuff+',  'Location+', 'Pitching+', 'ERA-', 'FIP-', 'xFIP-', 'xERA', 'FIP_ly', 'botERA', 'CSW%']]
+                    statcast = statcast[['cbsid', 'IDFANGRAPHS', 'Age_ly', 'TBF', 'K%', 'BB%', 'K-BB%_ly', 'FBv', 'Stuff+',  'Location+', 'Pitching+', 'ERA-', 'FIP-', 'xFIP-', 'xERA', 'FIP_ly', 'botERA', 'CSW%', 'Pitches', 'GS_sc']]
                 #merge_cols = ['cbsid'] + [c for c in statcast.columns if c not in df.columns and c != 'cbsid']
                 
                 df = df.merge(statcast, on='cbsid', how='left')
@@ -975,6 +977,7 @@ class FantasyProjections:
         self,
         hitting: pd.DataFrame,
         pitching: pd.DataFrame,
+        type: Literal['ros', 'period'] = 'ros',
         min_pa: int = 440,
         min_ip: float = 130,
         sp_min_ip: float = 130,
@@ -1048,6 +1051,10 @@ class FantasyProjections:
                     ((pitching['Primary_Pos'] == 'SP') & (pitching['IP'] >= sp_cutoff)) |
                     ((pitching['Primary_Pos'] == 'RP') & (pitching['IP'].between(rp_ip_range[0], rp_ip_range[1])) & (pitching.get('SvHld', 0) > min_sv_hld))
                 ].copy()
+            elif type == 'period':
+                # For period qualifiers, we include anyone with a projection
+                ip_cutoff = 0
+                qual_pitchers = pitching[pitching['IP'] >= ip_cutoff].copy()
             else:
                 ip_cutoff = pitching[pitching['IP'] > 0]['IP'].quantile(pitching_percentile)
                 qual_pitchers = pitching[pitching['IP'] >= ip_cutoff].copy()

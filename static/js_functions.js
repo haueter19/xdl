@@ -125,11 +125,11 @@ $.fn.tiers = function(){
     ]
     layout = {title: "Positional Tiers", hovermode:'closest', height: 500, width: 1300, margin: {l:20, t:30}, yaxis: {range: [-15,max_value+5]},
     shapes: [
-            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 35.7, y1: 35.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
-            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 27.6, y1: 27.6, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
-            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 24.54, y1: 24.54, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
-            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 19.75, y1: 19.75, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
-            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 16.7, y1: 16.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 38.1, y1: 38.1, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 28.1, y1: 28.1, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 23.9, y1: 23.9, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 20.7, y1: 20.7, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
+            {type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 18.5, y1: 18.5, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
             //{type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 15.03, y1: 15.03, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
             //{type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 13.5, y1: 13.5, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
             //{type: 'line', x0: -0.25, x1: 0.25, y0: 12.28, y1: 12.28, yref: 'y', line: {color: 'red', width: 1, dash: 'dash'}},
@@ -160,7 +160,7 @@ $.fn.paid_histogram = function(){
     
     var trace2 = 
         {
-            name:'Lima Time',
+            name:'Lima Time!',
             type: 'bar',
             x:['1-4', '5-9', '10-14', '15-19', '20-24', '25-29', '30-34', '35-39', '40+'],
             y:y_data,
@@ -193,7 +193,7 @@ $.fn.update_player_stats_window = function(selected_index){
     +'</tr></table>'
     if ((data[selected_index]['Primary_Pos']=='SP') || (data[selected_index]['Primary_Pos']=='RP')){
         tbl_html += `<table class="table draft-table table-striped"><thead><tr><th>Type</th><th>IP</th><th>ERA</th><th>WHIP</th><th>K</th><th>QS</th><th>SvHld</th>
-        <th>K-BB%</th><th>K/9</th><th>Velo</th><th>Pitching+</th><th>Stuff+</th><th>Location+</th><th>CSW%</th><th>FIP</th><th>xERA</th></tr></thead>`
+        <th>K-BB%</th><th>K/9</th><th>IP/GS</th><th>Velo</th><th>Pitching+</th><th>Stuff+</th><th>Location+</th><th>CSW%</th><th>FIP</th><th>xERA</th></tr></thead>`
         +'<tr><td>Proj</td>'
         +'<td>'+data[selected_index]['IP']+'</td>'
         +'<td>'+data[selected_index]['ERA']+'</td>'
@@ -203,6 +203,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SvHld']+'</td>'
         +'<td>'+Number(data[selected_index]['K-BB%']*100).toFixed(1)+'%</td>'
         +'<td>'+data[selected_index]['K/9']+'</td>'
+        +'<td>'+data[selected_index]['IP/GS']+'</td>'
         +'<td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>'
         +'</tr><tr><td>'+previousYear+'</td>'
         +'<td>'+Number(data[selected_index]['IP_ly']).toFixed(1)+'</td>'
@@ -213,6 +214,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SvHld_ly']+'</td>'
         +'<td>'+Number(data[selected_index]['K-BB%_ly']*100).toFixed(1)+'%</td>'
         +'<td>'+Number(data[selected_index]['K/9_ly']).toFixed(1)+'</td>'
+        +'<td>'+data[selected_index]['IP_ly/GS_sc']+'</td>'
         +'<td>'+data[selected_index]['FBv']+'</td>'
         +'<td>'+data[selected_index]['Pitching+']+'</td>'
         +'<td>'+data[selected_index]['Stuff+']+'</td>'
@@ -223,7 +225,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'</tr>'
         // 2 years ago
         +'<tr><td>'+twoYearsAgo+'</td>'
-        +'<td>'+Number(data[selected_index]['IP_2ly']/3).toFixed(1)+'</td>'
+        +'<td>'+Number(data[selected_index]['IP_2ly']).toFixed(1)+'</td>'
         +'<td>'+data[selected_index]['ERA_2ly']+'</td>'
         +'<td>'+Number(data[selected_index]['WHIP_2ly']).toFixed(2)+'</td>'
         +'<td>'+data[selected_index]['SO_2ly']+'</td>'
@@ -231,6 +233,7 @@ $.fn.update_player_stats_window = function(selected_index){
         +'<td>'+data[selected_index]['SvHld_2ly']+'</td>'
         +'<td>'+Number(data[selected_index]['K-BB%_2ly']*100).toFixed(1)+'%</td>'
         +'<td>'+Number(data[selected_index]['K/9_2ly']).toFixed(1) +'</td>'
+        +'<td>-</td>'
         +'<td>-</td>'
         +'<td>-</td>'
         +'<td>-</td>'
@@ -397,27 +400,27 @@ $(document).ready(function(){
         var supp_round = $("#supp_entry").val();
 
         if (player_id==""){
-            alert("Must select a player");
+            //alert("Must select a player");
             $("#error_msg").text('Choose a player').show();
             return false;
         }
         if (!bid_winner){
-            alert('Must select an owner');
+            //alert('Must select an owner');
             $("#error_msg").text('Choose a team').show();
             return false;
         }
         if (price_val<0 | price_val=='') {
-            alert('Must select a valid price')
+            //alert('Must select a valid price')
             $("#error_msg").text('Enter a valid price').show();
             return false;
         }
         if (supp_round < 0 | supp_round > 10){
-            alert('Must select a supp round 0 to 10')
+            //alert('Must select a supp round 0 to 10')
             $("#error_msg").text('Enter a valid supp').show();
             return false;
         }
         if (price_val >0 & supp_round > 0){
-            alert(`Either price or supp must be 0`);
+            //alert(`Either price or supp must be 0`);
             $("#error_msg").text('Either price or supp must be 0').show();
             return false;
         }

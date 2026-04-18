@@ -8,6 +8,7 @@ import math
 import os
 import pandas as pd
 import re
+from plotly import data
 from selenium.webdriver import Chrome
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -16,7 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import shutil
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, engine, text
 from typing import Optional, Generator
 import time
 
@@ -38,6 +39,8 @@ class Scraper():
         self.fangraphs_login_url = 'https://blogs.fangraphs.com/wp-login.php'
         self.cbs_ros_proj_url_h = 'https://xdl.baseball.cbssports.com/stats/stats-main/all:C:1B:2B:3B:SS:MI:CI:OF:DH/restofseason:p/standard/projections?print_rows=9999'
         self.cbs_ros_proj_url_p = 'https://xdl.baseball.cbssports.com/stats/stats-main/all:SP:RP:P/restofseason:p/standard/projections?print_rows=9999'
+        self.elig_url = 'https://xdl.baseball.cbssports.com/teams/eligibility/'
+        self.engine = create_engine('sqlite:///C:\\GitHub\\xdl\\fantasy_data.db')
         self.driver: Optional[Chrome] = None
 
     def _is_driver_alive(self) -> bool:
@@ -76,13 +79,22 @@ class Scraper():
             except Exception:
                 pass
 
+    def _get_current_period(self) -> int:
+        """Helper function to determine current CBS period based on date."""
+        opening_week = datetime(2026, 3, 23).isocalendar().week # <-- Must change each year. Should be the Monday of the first week of games
+        cur_week = datetime.now().isocalendar().week
+        if cur_week < opening_week:
+            return 0
+        else:
+            return cur_week - opening_week + 1
+
 
     def cbs_login(self):
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
         #CBS_LOGIN = os.getenv('CBS_LOGIN')
-        CBS_LOGIN = 'danhaueter19@gmail.com'
+        CBS_LOGIN = os.getenv('CBS_EMAIL')
         CBS_PASSWORD = os.getenv('CBS_PASSWORD')
 
         # Navigate to the CBS login page
@@ -101,7 +113,7 @@ class Scraper():
         
         # Click the "Continue" button
         continue_button.click()
-
+        time.sleep(self.SHORT_WAIT)
         if 'confirmed' in driver.current_url:
             return driver
         else:
@@ -179,22 +191,27 @@ class Scraper():
         return df
     
 
-    def cbs_projections(self, stats_type: str ='h') -> pd.DataFrame:
+    def cbs_projections(self, stats_type: str ='h', proj_type: str = 'preseason', period: int = 0) -> pd.DataFrame:
+        """Scrape CBS projections for hitters or pitchers. stats_type should be 'h' for hitters and 'p' for pitchers.
+        """
+        if period is None:
+            raise ValueError("Period must be specified as 'preseason' or an integer between 1 and 27.")
+        if proj_type in ['preseason', 'ros']:
+            preseason = True if proj_type == 'preseason' else False
+            filename = f'{datetime.now().year}-period-{period}-ros-projections-{stats_type}.csv'
+            url = self.cbs_ros_proj_url_h if stats_type == 'h' else self.cbs_ros_proj_url_p
+        else:
+            preseason = False
+            filename = f'{datetime.now().year}-period-{period}-projections-{stats_type}.csv'
+            url = self.cbs_ros_proj_url_h.replace('restofseason:p', f'{period}') if stats_type == 'h' else self.cbs_ros_proj_url_p.replace('restofseason:p', f'{period}')
+
         # Access the driver, create if it doesn't exist
         driver = self._get_driver()
         
-        if stats_type == 'h':
-            print(f"Stats type: {stats_type}")
-            print(f"Accessing URL: {self.cbs_ros_proj_url_h}")
-            driver.get(self.cbs_ros_proj_url_h)
-        elif stats_type == 'p':
-            print(f"Stats type: {stats_type}")
-            print(f"Accessing URL: {self.cbs_ros_proj_url_p}")
-            driver.get(self.cbs_ros_proj_url_p)
-        else:
-            print(f"Invalid stats type: {stats_type}")
-            #driver.quit()
-            return
+        #if stats_type == 'h':
+        print(f"Stats type: {stats_type}")
+        print(f"Accessing URL: {url}")
+        driver.get(url)
         
         time.sleep(self.SHORT_WAIT)
         try:
@@ -206,53 +223,50 @@ class Scraper():
             #driver.quit()
             return
 
-        # Get the HTML of the page
+        # Get the page source and parse with BeautifulSoup
         html = driver.page_source
-        soup = bs4(html, 'html.parser')
-        # Find the specific table you want
-        table = soup.find('table', {'class': 'data'})
-        # Use pandas to read the HTML table skipping 4 rows to get to actual table
-        for n in [4,1,2,3]:
-            df = pd.read_html(StringIO(str(table)), header=1, skiprows=n, extract_links='body')[0]
-            if 'Action' in df.columns:
-                break
-        
-        # Remove last row and first 2 columns
-        df = df.iloc[:-1, 2:]
-        # Apply a lambda function to each column to extract the first element of each tuple
-        df = df.apply(lambda col: [v[0] if v[1] is None else v for v in col])
-        # Define the regex pattern
-        pattern = r'^(?P<FullName>[A-Za-z\.\'\-\s]+) (?P<Positions>[A-Z0-9,]+) • (?P<Team>[A-Z]+)$'
-        # Extract the player name and ID
-        df['player'] = df['Player'].apply(lambda x: x[0])
-        df['id'] = df['Player'].apply(lambda x: x[1])
-        # Parse id for cbsid
-        df['cbsid'] = df['id'].apply(lambda x: int(x.replace('/players/playerpage/', '')))
-        # Use regex to parse out CBSNAME, Pos, and Team
-        df[['CBSNAME', 'Positions', 'Team']] = df['player'].str.extract(pattern)
+        df = self._process_from_source(html)
+
         # Save to csv
         if stats_type=='h':
             # Be sure to convert all columns to appropriate data types
             for col in ['AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'Rank']:
-                df[col] = df[col].astype(int)
+                df[col] = df[col].astype(float)
             for col in ['AVG', 'OBP', 'SLG']:
                 df[col] = df[col].astype(float)
-            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
-            df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
-            print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            df.rename(columns={'Positions':'Pos'}, inplace=True)
+            df['PA'] = df['AB'] + df['BB']
+            df = df[['cbsid', 'CBSNAME', 'Pos', 'Team', 'PA', 'AB', 'R', 'H', '1B', '2B', '3B', 'HR', 'RBI', 'BB', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'Rank']]
+            if proj_type == 'preseason':
+                # If preseason, only want to save the CSV
+                df[df['AB']>1].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
+                print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            else:
+                # Save a csv backup                
+                df[df['AB']>1].to_csv(f'{self.destination_path}/{filename}', index=False)
+                print(f'{filename} saved in {self.destination_path}')
         if stats_type=='p':
             # Be sure to convert all columns to appropriate data types
             for col in ['INNs', 'APP', 'GS', 'QS', 'CG', 'W', 'L', 'S', 'BS', 'HD', 'K', 'BB', 'H', 'Rank']:
-                df[col] = df[col].astype(int)
+                df[col] = df[col].astype(float)
             for col in ['ERA', 'WHIP']:
                 df[col] = df[col].astype(float)
-            df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD'}, inplace=True)
-            df = df[['cbsid', 'CBSNAME', 'Positions', 'Team', 'IP', 'W', 'L', 'SV', 'HLD', 'ERA', 'WHIP', 'K', 'BB', 'H', 'Rank']]
+            df.rename(columns={'INNs':'IP', 'S':'SV', 'HD':'HLD', 'H':'HA','Positions':'Pos'}, inplace=True)
+            df['SvHld'] = df['SV'] + df['HLD']
+            df['ER'] = round(df['ERA'] * df['IP'] / 9, 2)
+            df = df[['cbsid', 'CBSNAME', 'Pos', 'Team', 'IP', 'QS', 'W', 'L', 'SvHld', 'ERA', 'WHIP', 'ER', 'K', 'BB', 'HA', 'Rank']]
+            
             # Save to csv if projected IP > 0
-            df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
-            print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
-
+            if proj_type == 'preseason':
+                # If preseason, only want to save the CSV
+                df[df['IP']>0].to_csv(f'{self.destination_path}/{datetime.now().year}-cbs-proj-{stats_type}.csv', index=False)
+                print(f'{datetime.now().year}-cbs-proj-{stats_type}.csv saved in {self.destination_path}')
+            else:
+                # Save a csv backup
+                df[df['IP']>0].to_csv(f'{self.destination_path}/{filename}', index=False)
+                print(f'{filename} saved in {self.destination_path}')
         return df
+    
 
 
     def fangraphs_projections(self, system_name, stats_type='h', statgroup='fantasy', fantasypreset='roto5x5'):
@@ -307,3 +321,211 @@ class Scraper():
         shutil.move(os.path.join(self.download_path,filename), os.path.join(self.destination_path,filename))
         logger.info(f'{filename} saved in {self.destination_path}')
         return filename
+    
+
+    def eligible_positions(self, year: int = datetime.now().year) -> pd.DataFrame:
+        """Scrape CBS eligibility page to get player eligibility for the period"""
+        driver = self._get_driver()
+        driver = self.cbs_login()
+
+        current_period = self._get_current_period()
+
+        # Query current year owners from database to create a mapping of owner name to owner_id
+        owners_df = pd.read_sql(f"""
+            SELECT distinct d.Owner owner, owner_id
+            FROM players{year} d
+            INNER JOIN owners o On (d.Owner=o.owner)
+            WHERE 
+                d.Owner IS NOT NULL
+            """, self.engine)
+        
+        owner_dict = {}
+        for record in owners_df.to_dict('records'):
+            owner_dict[record['owner']] = record['owner_id']
+        
+
+        elig = pd.DataFrame()
+        for owner, owner_id in owner_dict.items():
+            print(owner)
+            try:
+                elig = pd.concat([elig, self._process_eligibility(owner_id, driver)])
+            except:
+                print('...skipped')
+        
+        # Save backup copy to data folder
+        elig.to_csv(rf'C:\GitHub\xdl\player_projections\data\{datetime.now().year}-eligibility-period-{current_period}.csv', index=False)
+
+        elig.loc[(elig['SP']>0), 'P'] = 5
+        elig.loc[(elig['RP']>0), 'P'] = 5
+        elig.loc[elig['P']==0, 'DH'] = 5
+        elig.fillna({'P': 0}, inplace=True)
+        elig['year'] = datetime.now().year
+        elig['week'] = current_period
+        elig.loc[elig['P']==0, 'DH'] = 5
+        elig['all_pos'] = elig.apply(lambda x: ",".join(self._stitch_positions(x)), axis=1)
+        elig.drop(columns='Pos',inplace=True)
+        elig['Player'] = elig['Player'].str.rstrip().str.lstrip()
+
+        for col in elig.columns:
+            if col in ['C', '1B', '2B', '3B', 'SS', 'OF', 'MI', 'CI', 'DH', 'SP', 'RP', 'P']:
+                elig.rename(columns={col:'pos'+col},inplace=True)
+        # Makes sure non-pitchers have a 5 for their DH position
+        elig.loc[(elig['posSP']==0) & (elig['posRP']==0) & (elig['posP']==0) & (elig['posDH']<5), 'posDH'] = 5
+
+        # Delete existing eligibility for the current period to avoid duplicates
+        with self.engine.connect() as conn:
+            delete_query = text(f"""
+                DELETE FROM eligibility
+                WHERE year = {datetime.now().year} AND week = {current_period}
+            """)
+            conn.execute(delete_query)
+            conn.commit()
+
+        # Appends to eligibility table
+        elig[['cbsid', 'year', 'week', 'all_pos', 'posC', 'pos1B', 'pos2B', 'pos3B', 'posSS', 'posMI', 'posCI', 'posOF', 'posDH', 'posSP', 'posRP', 'posP']]\
+            .to_sql('eligibility', con=self.engine, if_exists='append', index=False)
+
+        return elig
+
+    
+    def get_weekly_sit_or_start_by_owner(self, owner_id: int, start_period: int, current_period: int, last_week: int = 28) -> pd.DataFrame:
+        """Scrape CBS eligibility page to get weekly sit/start info for a given owner_id and period range"""
+        driver = self._get_driver()
+        driver.get(f"https://xdl.baseball.cbssports.com/teams/{owner_id}")
+        time.sleep(1.2)
+        driver.execute_script("window.scrollTo(0, 0);")
+        
+        data = pd.DataFrame()
+        for wk in range(start_period, current_period):
+            if wk==1:
+                try:
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='Off Season']").click()
+                except:
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='{current_period}']").click()
+                driver.implicitly_wait(4)
+                driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/ul/li[@value='/teams/roster-report/{owner_id}/1/']").click()
+            elif wk==last_week:
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(.5)        
+                driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='OFF SEASON']").click()
+                time.sleep(2)
+                elem = driver.find_elements(By.XPATH, f"//div[@class ='select_form_div darkFilter']/ul/li")
+                driver.implicitly_wait(4)
+                time.sleep(2)
+                for e in elem:
+                    if e.text==str(wk):
+                        e.click()
+            else:
+                driver.execute_script("window.scrollTo(0, 0);")
+                time.sleep(.5)
+                try: # if running through all periods
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='{wk-1}']").click()
+                    time.sleep(2)
+                except: # if just doing the most recent week
+                    driver.find_element(By.XPATH, f"//div[@class ='select_form_div darkFilter']/div/span[text()='{current_period}']").click()
+                    time.sleep(2)
+                elem = driver.find_elements(By.XPATH, f"//div[@class ='select_form_div darkFilter']/ul/li")
+                driver.implicitly_wait(4)
+                time.sleep(2)
+                for e in elem:
+                    if e.text==str(wk):
+                        e.click()
+            
+            time.sleep(2)
+            html = driver.page_source
+            soup = bs4(html, 'html.parser')
+            data = pd.concat([data, scrape_cbs_owner_weekly_roster(soup, ids, owner_name, wk)])
+            data['year'] = datetime.now().year
+            data['owner_id'] = owner_id
+        
+        data.rename(columns={'CBSID':'cbsid', 'Week':'week', 'Pos':'pos'}, inplace=True)
+        data.to_excel(f'data//{datetime.now().year}-{owner_name}-sit-start.xlsx', engine='openpyxl', index=False)
+        return data
+
+    def _process_eligibility(self, val: int, driver: Chrome) -> pd.DataFrame:
+        """Helper function to process eligibility for a given owner_id and return a DataFrame."""
+        driver.get(f"{self.elig_url}{val}")
+        time.sleep(3.2)
+        html = driver.page_source
+        soup = bs4(html, 'html.parser')
+        elig = pd.read_html(StringIO(str(soup.find_all('table'))))[0]
+        player_ids = self._get_cbsid_from_eligibility(soup)
+        elig['cbsid'] = player_ids
+        elig['Pos'] = elig['Player'].apply(lambda x: x[re.search(r'RP|SP|1B|2B|3B|SS|OF|LF|CF|RF|DH|C\s', x).span()[0]:re.search(r'•', x).span()[0]-1])
+        elig['Player'] = elig['Player'].apply(lambda x: x[:re.search(r'RP|SP|1B|2B|3B|SS|OF|LF|CF|RF|DH|C\s', x).span()[0]])
+        #elig.fillna(0,inplace=True)
+        
+        # Adjust games played to a minimum of 5 if player has eligigibility there but not enough games played yet
+        for i, player in elig.iterrows():
+            for pos in player['Pos'].split(','):
+                #print(i, pos)
+                elig.at[i,pos] = 5
+                if pos in ['1B', '3B'] and player[pos] < 5:
+                    elig.at[i, 'CI'] = 5
+                if pos in ['2B', 'SS'] and player[pos] < 5:
+                    elig.at[i, 'MI'] = 5
+                if pos in ['RP', 'SP'] and player[pos] < 5:
+                    elig.at[i, 'P'] = 5
+                if pos in ['C', '1B', '2B', '3B', 'SS', 'OF', 'DH'] and player[pos] < 5:
+                    elig.at[i, 'DH'] = 5
+        elig.fillna(0,inplace=True)
+        
+        # Change numeric columns to int64
+        for col in elig.select_dtypes('number').columns:
+            elig[col] = elig[col].astype('int64')
+        return elig
+    
+
+    def _get_cbsid_from_eligibility(self, s: bs4) -> list:
+        player_ids = []
+
+        # Find all the 'a' tags (links) within the table
+        links = s.find('table').find_all('a')
+
+        # Iterate over links
+        for link in links:
+            # Get the href attribute value
+            href = link.get('href')
+            # Extract the number at the end using regular expressions
+            try:
+                player_id = re.search(r'/(\d+)', href).group(1)
+                if int(player_id) not in player_ids:
+                    player_ids.append(int(player_id))
+            except:
+                pass
+        
+        return player_ids
+    
+
+    def _stitch_positions(self, row) -> list:
+        position_priority = ['C', '2B', '3B', 'SS', 'OF', '1B', 'MI', 'CI', 'DH', 'SP', 'RP']
+        pos_code = row[position_priority+['P']]>=5
+        return list(pos_code[pos_code].index)
+    
+
+    def _process_from_source(self, html) -> pd.DataFrame:
+        """Helper function to process projections from source and return a DataFrame with standardized columns."""
+        # This function would contain the logic to read the raw projections file, standardize column names, merge with player index to get cbsid, and return the processed DataFrame.        
+        soup = bs4(html, 'html.parser')
+        # Find the specific table you want
+        table = soup.find('table', {'class': 'data'})
+        # Use pandas to read the HTML table skipping 4 rows to get to actual table
+        for n in [4,1,2,3]:
+            df = pd.read_html(StringIO(str(table)), header=1, skiprows=n, extract_links='body')[0]
+            if 'Action' in df.columns:
+                break
+        
+        # Remove last row and first 2 columns
+        df = df.iloc[:-1, 2:]
+        # Apply a lambda function to each column to extract the first element of each tuple
+        df = df.apply(lambda col: [v[0] if v[1] is None else v for v in col])
+        # Define the regex pattern
+        pattern = r'^(?P<FullName>[A-Za-z\.\'\-\s]+) (?P<Positions>[A-Z0-9,]+) • (?P<Team>[A-Z]+)$'
+        # Extract the player name and ID
+        df['player'] = df['Player'].apply(lambda x: x[0])
+        df['id'] = df['Player'].apply(lambda x: x[1])
+        # Parse id for cbsid
+        df['cbsid'] = df['id'].apply(lambda x: int(x.split('?')[0].replace('/players/playerpage/', '')))
+        # Use regex to parse out CBSNAME, Pos, and Team
+        df[['CBSNAME', 'Positions', 'Team']] = df['player'].str.extract(pattern)
+        return df
